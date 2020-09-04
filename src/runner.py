@@ -180,7 +180,7 @@ class Runner:
                 pth_time = ckpt_dict["extra_state"]["pth_time"]
 
         if self.optimizer is not None and train_cfg.LR.SCHEDULE:
-            steps_per_update = training_set.get_num_batches()
+            steps_per_update = len(training_set) / self.config.DATA.BATCH_SIZE
             warmup_updates = 1
             lr_scheduler = WarmupCosineWithHardRestartsSchedule(
                 self.optimizer,

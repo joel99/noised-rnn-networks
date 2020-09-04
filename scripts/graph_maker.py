@@ -31,6 +31,8 @@ def make_and_save_graph(generator=graph_generator, seed=graph_seed):
     gen_class = GENERATORS[generator]
 
     G = gen_class(n, p, seed=seed)
+    # TODO disallow >1 CC
+
     nx.write_edgelist(G, target_path)
 
 make_and_save_graph()

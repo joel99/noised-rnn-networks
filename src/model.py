@@ -76,7 +76,7 @@ class GraphRNN(MessagePassing):
 
         m = self.state_to_message(x)
         # propagate_type: (x: Tensor)
-        m = self.propagate(self.graph, x=m) # ! what are propagate parameters? size=None
+        m = self.propagate(self.graph, x=m)
         if inputs is not None:
             m_and_input = torch.cat([m, inputs], dim=-1)
             m = self.mix_input(m_and_input)
@@ -90,11 +90,11 @@ class GraphRNN(MessagePassing):
 
         return x
 
-    # ! What are these methods for?
-    # TODO make sure these messaging methods are correct
+    # Note - x_j is source, x_i is target
     def message(self, x_j: Tensor):
         return x_j
 
+    # Since adj is from->to, adj_t is to->from, and matmul gets everything going to x_i, which is reduced
     def message_and_aggregate(self, adj_t: SparseTensor, x: Tensor) -> Tensor:
         return matmul(adj_t, x, reduce=self.aggr)
 
@@ -113,18 +113,41 @@ class SeqSeqModel(nn.Module):
         super().__init__()
         self.device = device
         self.graphrnn = GraphRNN(config, device)
+        self.readout = nn.Linear(config.HIDDEN_SIZE, 1) # depends on the task... this is per node for example
+        # We may consider adding a module for aggregate readout here
 
-    def forward(self, x, labels, label_mask):
+    def forward(self,
+        x,
+        targets,
+        targets_mask,
+        input_mask=None,
+        log_state=False,
+    ):
         r"""
             If we only care about certain labels e.g. final timestep, we'll need to drop losses for othehr slots.
             This will just come in the form of a mask, so we can do things in parallel.
 
-            x: B x T x N x H
-            labels: B x T x N x H
-            label_mask: B x T x N x H. 1 if we should keep the loss, 0 if not.
-        """
+            ! TODO support input_mask
 
-        # ! Implement!
-        if x.size(-1) < self.hidden_size:
-            zero = x.new_zeros(x.size(0), self.out_channels - x.size(-1))
-            x = torch.cat([x, zero], dim=1)
+            x: B x T x N x H
+            input_mask: B x T x N x H. Ignore input when x = 1. ! Don't think supporting B is posssible.
+            targets: B x T x N x 1
+            targets_mask: B x T x N x 1. 1 if we should keep the loss, 0 if not.
+        """
+        if input_mask is None and x.size(1) != targets.size(1):
+            raise Exception(f"Input ({x.size(1)}) and targets ({targets.size(1)}) misaligned.")
+
+        state = torch.zeros(x.size(0), x.size(2), x.size(3), device=self.device) # TODO optionally make learnable
+        all_states = [state]
+        outputs = []
+        for i in range(x.size(1)):
+            state = self.graphrnn(x[:, i], state)
+            if log_state:
+                all_states.append(state)
+            output = self.readout(state) # B x N x 1
+            outputs.append(output)
+        outputs = torch.stack(outputs, 1)
+        error = outputs - targets
+        mse = 0.5 * error.pow(2)
+        mse_loss = torch.masked_select(mse, targets_mask)
+        return mse_loss
