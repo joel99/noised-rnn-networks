@@ -45,7 +45,13 @@ _C.DATA.OVERFIT_TEST = False
 _C.MODEL = CN()
 _C.MODEL.NAME = "GraphRNN"
 _C.MODEL.HIDDEN_SIZE = 16
+_C.MODEL.INPUT_SIZE = 4
+_C.MODEL.NUM_STEPS = 50 # ! Revisit this. This will entirely depend on the task...
+_C.MODEL.GRAPH_FILE = "configs/graphs/"
+
 _C.MODEL.DROPOUT = .1
+_C.MODEL.INDEPENDENT_DYNAMICS = False # Do nodes have independent GRU parameters?
+_C.MODEL.AGGR = "add" # Message aggregation
 
 # -----------------------------------------------------------------------------
 # Train Config
