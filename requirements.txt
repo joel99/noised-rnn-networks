@@ -1,0 +1,22 @@
+# Requirements for Noised RNN Networks
+# Base - I have these versions + CUDA 10.2
+numpy>=1.16.1
+-f https://download.pytorch.org/whl/torch_stable.html
+torch==1.6.0
+-f https://download.pytorch.org/whl/torch_stable.html
+torchvision==0.7.0
+
+# Jupyter for analysis
+jupyter-core==4.6.1
+
+# Pytorch Geometric
+# https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html
+-f https://pytorch-geometric.com/whl/torch-1.6.0.html
+torch-scatter==latest+cu102
+-f https://pytorch-geometric.com/whl/torch-1.6.0.html
+torch-sparse==latest+cu102
+-f https://pytorch-geometric.com/whl/torch-1.6.0.html
+torch-cluster==latest+cu102
+-f https://pytorch-geometric.com/whl/torch-1.6.0.html
+torch-spline-conv==latest+cu102
+torch-geometric
