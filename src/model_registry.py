@@ -2,11 +2,13 @@
 # Author: Joel Ye
 
 from src.model import (
-    GraphRNN
+    GraphRNN,
+    SeqSeqModel
 )
 
 MODELS = {
-    "GraphRNN": GraphRNN
+    "GraphRNN": GraphRNN,
+    "SeqSeq": SeqSeqModel
 }
 
 def get_model_class(model_name):

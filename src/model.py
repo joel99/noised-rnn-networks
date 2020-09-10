@@ -15,7 +15,6 @@ from torch.nn import Parameter as Param
 from torch_sparse import SparseTensor, matmul
 from torch_geometric.nn.conv import MessagePassing
 
-from ..inits import uniform
 
 from src import logger
 
@@ -45,6 +44,7 @@ class GraphRNN(MessagePassing):
         self.graph = G.edges.values() # edge_index
         # TODO fix above
 
+        # We may do experiments with fixed dynamics across nodes
         if config.INDEPENDENT_DYNAMICS:
             self.rnns = nn.ModuleList([
                 nn.GRUCell(config.INPUT_SIZE, self.hidden_size) for _ in range(self.n)
@@ -60,7 +60,8 @@ class GraphRNN(MessagePassing):
 
 
     def reset_parameters(self):
-        uniform(self.out_channels, self.weight)
+        nn.init.uniform_(self.out_channels)
+        nn.init.uniform_(self.weight)
         self.rnn.reset_parameters()
 
     def forward(self, x: Tensor, inputs: Tensor = None) -> Tensor:

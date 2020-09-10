@@ -20,3 +20,6 @@ torch-cluster==latest+cu102
 -f https://pytorch-geometric.com/whl/torch-1.6.0.html
 torch-spline-conv==latest+cu102
 torch-geometric
+
+# NetworkX
+networkx==2.5

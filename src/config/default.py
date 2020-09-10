@@ -50,7 +50,7 @@ _C.DATA.OVERFIT_TEST = False
 # Model
 # -----------------------------------------------------------------------------
 _C.MODEL = CN()
-_C.MODEL.NAME = "GraphRNN"
+_C.MODEL.NAME = "SeqSeq"
 _C.MODEL.HIDDEN_SIZE = 16
 _C.MODEL.INPUT_SIZE = 4
 _C.MODEL.NUM_STEPS = 50 # ! Revisit this. This will entirely depend on the task...
