@@ -33,6 +33,12 @@ _C.SYSTEM.NUM_GPUS = 1
 # -----------------------------------------------------------------------------
 # Data
 # -----------------------------------------------------------------------------
+# Each dataset has its defines its own task, which requires the right dataloader as well as the right model.
+
+_C.TASK = CN()
+# Task key defines the dataloader to use, and affects the model head.
+_C.TASK.KEY = "sinusoid"
+
 _C.DATA = CN()
 _C.DATA.DATAPATH = 'data/'
 _C.DATA.TRAIN_FILENAME = 'train.pth'

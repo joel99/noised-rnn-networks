@@ -112,6 +112,7 @@ class SeqSeqModel(nn.Module):
     def __init__(self, config, device):
         super().__init__()
         self.device = device
+        self.duplicate_inputs = False # TODO add duplicate module dependent on dataset configuration
         self.graphrnn = GraphRNN(config, device)
         self.readout = nn.Linear(config.HIDDEN_SIZE, 1) # depends on the task... this is per node for example
         # We may consider adding a module for aggregate readout here
@@ -124,15 +125,13 @@ class SeqSeqModel(nn.Module):
         log_state=False,
     ):
         r"""
-            If we only care about certain labels e.g. final timestep, we'll need to drop losses for othehr slots.
-            This will just come in the form of a mask, so we can do things in parallel.
+            Calculate loss.
+            x: B x T x H_in or B x T x N x H_in
+            targets: B x T x N x H_out=1
+            targets_mask: B x T x N. 1 to keep the loss, 0 if not.
 
-            ! TODO support input_mask
-
-            x: B x T x N x H
-            input_mask: B x T x N x H. Ignore input when x = 1. ! Don't think supporting B is posssible.
-            targets: B x T x N x 1
-            targets_mask: B x T x N x 1. 1 if we should keep the loss, 0 if not.
+            # Not supported
+            input_mask: B x T x N. Ignore input when x = 1. ! Don't think supporting B is posssible.
         """
         if input_mask is None and x.size(1) != targets.size(1):
             raise Exception(f"Input ({x.size(1)}) and targets ({targets.size(1)}) misaligned.")
@@ -150,4 +149,4 @@ class SeqSeqModel(nn.Module):
         error = outputs - targets
         mse = 0.5 * error.pow(2)
         mse_loss = torch.masked_select(mse, targets_mask)
-        return mse_loss
+        return mse_loss.mean()

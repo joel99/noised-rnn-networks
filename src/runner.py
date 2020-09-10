@@ -7,11 +7,10 @@ import os.path as osp
 import time
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils import data
+from torch.utils import data as torchData
 # from pytorch_transformers import AdamW, WarmupCosineWithHardRestartsSchedule
 
 from src import (
@@ -20,28 +19,13 @@ from src import (
     logger
 )
 
-from src.dataset import NetworkDataset
+from src.dataset import DatasetRegistry
+from src.utils import linear_decay, get_lightest_gpus
 
 """
 Runner class orchestrates model usage.
-TODO: implement
+TODO: add task based model heads
 """
-def linear_decay(epoch: int, total_num_updates: int) -> float:
-    r"""Returns a multiplicative factor for linear value decay
-
-    Args:
-        epoch: current epoch number
-        total_num_updates: total number of
-
-    Returns:
-        multiplicative factor that decreases param value linearly
-    """
-    return 1 - (epoch / float(total_num_updates))
-
-def get_lightest_gpus(num_gpus):
-    os.system('nvidia-smi -q -d Memory |grep -A4 GPU|grep Free >tmp')
-    memory_available = [int(x.split()[2]) for x in open('tmp', 'r').readlines()]
-    return np.argsort(memory_available)[-num_gpus:].tolist()
 
 class Runner:
     def __init__(self, config):
@@ -160,14 +144,18 @@ class Runner:
         self.setup_model()
 
         train_cfg = self.config.TRAIN
-        training_set = NetworkDataset(self.config, self.config.DATA.TRAIN_FILENAME, mode="train")
-        training_generator = data.DataLoader(training_set,
+        task_cfg = self.config.TASK
+
+        dataset_cls = DatasetRegistry.get_dataset(task_cfg.KEY)
+
+        training_set = dataset_cls(self.config, self.config.DATA.TRAIN_FILENAME, task_cfg.KEY, mode="train")
+        training_generator = torchData.DataLoader(training_set,
             batch_size=train_cfg.BATCH_SIZE, shuffle=True
         )
 
         if train_cfg.DO_VAL:
             # * We assume val is small enough that we don't need a generator
-            validation_set = NetworkDataset(self.config, self.config.DATA.VAL_FILENAME, mode="val")
+            validation_set = dataset_cls(self.config, self.config.DATA.VAL_FILENAME, task_cfg.KEY, mode="val")
 
         self.optimizer = optim.AdamW(
             list(filter(lambda p: p.requires_grad, self._get_parameters())),
@@ -202,9 +190,9 @@ class Runner:
                 pth_time = ckpt_dict["extra_state"]["pth_time"]
 
         if self.optimizer is not None and train_cfg.LR.SCHEDULE:
-            steps_per_update = len(training_set) / self.config.DATA.BATCH_SIZE
-            warmup_updates = 1
-            lr_scheduler = optim.lr_scheduler(
+            # steps_per_update = len(training_set) / self.config.DATA.BATCH_SIZE
+            # warmup_updates = 1
+            lr_scheduler = optim.lr_scheduler.LambdaLR(
                 self.optimizer,
                 lambda x: linear_decay(x, self.config.NUM_UPDATES)
                 # warmup_steps=steps_per_update * warmup_updates,

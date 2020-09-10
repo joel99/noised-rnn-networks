@@ -25,11 +25,14 @@ torch.set_grad_enabled(False)
 r"""
 See `SinusoidDataset` in `src/dataset` for context + usage.
 Data Contract:
+    task_key
     data: total signal. Shaped B x N x T
     warmup_period: int for feedin timesteps
     trial_period: int for output timesteps
     We should have warmup_period + trial_period = T.
 """
+
+TASK_KEY = "sinusoid"
 
 def sinusoidal_generator(
     seed=0,
@@ -81,11 +84,13 @@ data_dir = "/nethome/jye72/projects/noised-rnn-networks/data"
 os.makedirs(data_dir, exist_ok=True)
 
 train_dict = dict(
+    key=TASK_KEY,
     warmup_period=warmup_period,
     trial_period=trial_period,
     data=train_data
 )
 val_dict = dict(
+    key=TASK_KEY,
     warmup_period=warmup_period,
     trial_period=trial_period,
     data=val_data

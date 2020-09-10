@@ -13,21 +13,21 @@ class TemporalNetworkDataset(data.Dataset):
         A temporal network dataset is a modeling problem for N nodes over time.
         It has an input defined for each node, or an aggregate input at each timestep (flagged by `HAS_AGGREGATE_INPUT`).
         Note that if we have aggregate input, typical model behavior will duplicate input for nodes.
-            input: B x N x T, or B x T
+            input: B x T x N x h_in, or B x T x h_in
 
         It has exactly one of two output targets, each of which come with a mask that defines where and when we measure loss:
         1. An output defined for each node at each timestep.
-            node_output: B x N x T
-            node_mask: B x N x T
+            node_output: B x T x N x h_out=1
+            node_mask: B x T x N
         2. An aggregate output that the network should decode. (e.g. for sequential MNIST)
-            net_output: B x T
+            net_output: B x T x h_out=1
             net_mask: B x T
     """
     HAS_AGGREGATE_INPUT = False
     HAS_AGGREGATE_TARGET = False
     HAS_NODE_TARGET = True
 
-    def __init__(self, config, filename, mode="train"):
+    def __init__(self, config, filename, task_key, mode="train"):
         r"""
             args:
                 config: dataset config
@@ -41,6 +41,8 @@ class TemporalNetworkDataset(data.Dataset):
         split_path = self.datapath.split(".")
         if split_path[-1] == "pth":
             dataset_dict = torch.load(self.datapath)
+            if "task_key" not in dataset_dict or dataset_dict["task_key"] != task_key:
+                raise Exception(f"Unexpected dataset task {dataset_dict['task_key']}. Expected configured task {task_key}")
             self._initialize_dataset(dataset_dict)
         else:
             raise Exception(f"Unknown dataset extension {split_path[-1]}")
@@ -70,11 +72,11 @@ class TemporalNetworkDataset(data.Dataset):
     def __getitem__(self, index):
         r"""
             Return: Tuple of
-                input: B x T or B x N x T
-                target: B x T or B x N x T
-                mask: same as output
+                input: B x T x H_in or B x T x N x H_in
+                target: B x T x H_out or B x T x N x H_out
+                mask: B x T or B x T x N
         """
-        return self.inputs[index], self.targets[index], self.mask[index]
+        return self.inputs[index], self.targets[index], self.masks[index]
 
     def get_dataset(self):
         return self.inputs, self.targets, self.masks
@@ -93,7 +95,7 @@ class SinusoidDataset(TemporalNetworkDataset):
 
         See `data/sinusoid.py` for generation.
     """
-    def _initialize_dataset(self, raw_data):
+    def _initialize_dataset(self, dataset_dict):
         r"""
             Data Contract:
                 data: total signal. Shaped B x N x T
@@ -101,12 +103,24 @@ class SinusoidDataset(TemporalNetworkDataset):
                 trial_period: int for output timesteps
                 We should have warmup_period + trial_period = T.
         """
-        warmup_period = raw_data['warmup_period']
-        trial_period = raw_data['trial_period']
-        data = raw_data['data'][:warmup_period + trial_period]
+        warmup_period = dataset_dict['warmup_period']
+        trial_period = dataset_dict['trial_period']
+        sin_data = dataset_dict['data'][:warmup_period + trial_period].permute(1, 0, 2).unsqueeze(1) # Now shaped B x T x N x 1
 
-        self.inputs = data.clone()
+        self.inputs = sin_data.clone()
         self.inputs[..., warmup_period:] = 0
-        self.targets = data.clone()
+        self.targets = sin_data.clone()
         self.masks = torch.ones_like(self.targets)
         self.masks[..., :warmup_period] = 0
+
+
+class DatasetRegistry:
+    _registry = {
+        "sinusoid": SinusoidDataset
+    }
+
+    @classmethod
+    def get_dataset(cls, key) -> TemporalNetworkDataset:
+        if key not in DatasetRegistry._registry:
+            raise Exception(f"{key} dataset not found. Supported datasets are {DatasetRegistry._registry.keys()}")
+        return DatasetRegistry._registry[key]
