@@ -30,6 +30,7 @@ Data Contract:
     warmup_period: int for feedin timesteps
     trial_period: int for output timesteps
     We should have warmup_period + trial_period = T.
+Currently outputs N=20 (though we can use any subset of N)
 """
 
 TASK_KEY = "sinusoid"

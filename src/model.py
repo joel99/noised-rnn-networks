@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # Author: Joel Ye
-import math
 
 import networkx as nx
 
@@ -29,23 +28,25 @@ class GraphRNN(MessagePassing):
         Different from GatedGraphConv, we wil accept variable length input and run for a specified number of steps.
 
         TODO do I need to consider directed vs undirected?
+        # ! By default, the edge list is read in as one direction, so we interpret as directed messages
 
-        TODO cite pytorch-geometric
-        TODO cite GatedGraphConv
     """
-    def __init__(self, config, device):
-        super().__init__(aggr=config.aggr)
+    def __init__(self, config, task_cfg, device):
+        super().__init__(aggr=config.AGGR)
         self.config = config
 
         self.hidden_size = config.HIDDEN_SIZE
-        self.input_size = config.INPUT_SIZE
+        self.input_size = task_cfg.INPUT_SIZE
 
-        G = nx.read_edgelist(config.GRAPH_FILE) # is this really 2xE
-        self.graph = G.edges.values() # edge_index
-        # TODO fix above
+        G = nx.read_edgelist(config.GRAPH_FILE, nodetype=int) # is this really 2xE
+        if len(G) != task_cfg.NUM_NODES:
+            raise Exception(f"Task nodes {task_cfg.NUM_NODES} and graph nodes {len(G)} don't match.")
+        # Note - this is inherently directed
+        self.graph = torch.tensor(list(G.edges), dtype=torch.long, device=device).permute(1, 0) # edge_index
 
         # We may do experiments with fixed dynamics across nodes
         if config.INDEPENDENT_DYNAMICS:
+            self.n = len(G)
             self.rnns = nn.ModuleList([
                 nn.GRUCell(config.INPUT_SIZE, self.hidden_size) for _ in range(self.n)
             ])
@@ -56,27 +57,19 @@ class GraphRNN(MessagePassing):
         self.mix_input = nn.Linear(self.hidden_size + self.input_size, self.hidden_size)
 
         self.device = device
-        self.reset_parameters()
 
-
-    def reset_parameters(self):
-        nn.init.uniform_(self.out_channels)
-        nn.init.uniform_(self.weight)
-        self.rnn.reset_parameters()
-
-    def forward(self, x: Tensor, inputs: Tensor = None) -> Tensor:
+    def forward(self, inputs: Tensor, state: Tensor,) -> Tensor:
         r"""
             Will create messages from state and message neighbors.
             Nodes step recurrent state based on messages and input, if available.
             Args:
-                x: node state. B x N x h
                 inputs: B x N x input_size or None
+                state: node state. B x N x h
             Returns:
-                x: node state. B x N x h
+                state: node state. B x N x h
         """
-
-        m = self.state_to_message(x)
-        # propagate_type: (x: Tensor)
+        b, n, _ = state.size()
+        m = self.state_to_message(state)
         m = self.propagate(self.graph, x=m)
         if inputs is not None:
             m_and_input = torch.cat([m, inputs], dim=-1)
@@ -84,18 +77,20 @@ class GraphRNN(MessagePassing):
         if self.config.INDEPENDENT_DYNAMICS:
             rnn_states = []
             for i, rnn in enumerate(self.rnns):
-                rnn_states.append(rnn(m[:,i], x[:,i]))
-            x = torch.stack(dim=1)
+                rnn_states.append(rnn(m[:,i], state[:,i]))
+            state = torch.stack(rnn_states, dim=1)
         else:
-            x = self.rnn(m, x)
-
-        return x
+            # B x N x H, B x N x H. Gru cell only supports 1 batch dim,
+            state = self.rnn(m.view(-1, self.hidden_size), state.view(-1, self.hidden_size)).view(b, n, -1)
+        return state
 
     # Note - x_j is source, x_i is target
     def message(self, x_j: Tensor):
         return x_j
 
     # Since adj is from->to, adj_t is to->from, and matmul gets everything going to x_i, which is reduced
+    # ! I don't think this gets used
+    # https://pytorch-geometric.readthedocs.io/en/latest/_modules/torch_geometric/nn/conv/message_passing.html?highlight=message_and_aggregate#
     def message_and_aggregate(self, adj_t: SparseTensor, x: Tensor) -> Tensor:
         return matmul(adj_t, x, reduce=self.aggr)
 
@@ -110,13 +105,15 @@ Instead, we'll build out separate models for each use case.
 """
 
 class SeqSeqModel(nn.Module):
-    def __init__(self, config, device):
+    def __init__(self, config, task_cfg, device):
         super().__init__()
+        self.hidden_size = config.HIDDEN_SIZE
         self.device = device
-        self.duplicate_inputs = False # TODO add duplicate module dependent on dataset configuration
-        self.graphrnn = GraphRNN(config, device)
-        self.readout = nn.Linear(config.HIDDEN_SIZE, 1) # depends on the task... this is per node for example
-        # We may consider adding a module for aggregate readout here
+        self.duplicate_inputs = False
+        # TODO (duplicate) add duplicate module dependent on dataset configuration
+        self.graphrnn = GraphRNN(config, task_cfg, device)
+        self.readout = nn.Linear(self.hidden_size, 1) # depends on the task... this is per node for example
+        # TODO (mnist) add a module for aggregate readout here
 
     def forward(self,
         x,
@@ -137,7 +134,7 @@ class SeqSeqModel(nn.Module):
         if input_mask is None and x.size(1) != targets.size(1):
             raise Exception(f"Input ({x.size(1)}) and targets ({targets.size(1)}) misaligned.")
 
-        state = torch.zeros(x.size(0), x.size(2), x.size(3), device=self.device) # TODO optionally make learnable
+        state = torch.zeros(x.size(0), x.size(2), self.hidden_size, device=self.device) # TODO optionally make learnable
         all_states = [state]
         outputs = []
         for i in range(x.size(1)):
@@ -146,7 +143,7 @@ class SeqSeqModel(nn.Module):
                 all_states.append(state)
             output = self.readout(state) # B x N x 1
             outputs.append(output)
-        outputs = torch.stack(outputs, 1)
+        outputs = torch.stack(outputs, 1) # B x T x N x 1
         error = outputs - targets
         mse = 0.5 * error.pow(2)
         mse_loss = torch.masked_select(mse, targets_mask)

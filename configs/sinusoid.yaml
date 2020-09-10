@@ -1,5 +1,9 @@
-CHECKPOINT_DIR: "/home/joel/"
+CHECKPOINT_DIR: "/nethome/jye72/share/noised-rnn-networks/"
 DATA:
   DATAPATH: "/nethome/jye72/projects/noised-rnn-networks/data"
   TRAIN_FILENAME: "sin_train.pth"
   VAL_FILENAME: "sin_val.pth"
+MODEL:
+  GRAPH_FILE: "configs/graphs/n10_p0.6_test.edgelist"
+TRAIN:
+  BATCH_SIZE: 32

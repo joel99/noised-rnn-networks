@@ -38,6 +38,8 @@ _C.SYSTEM.NUM_GPUS = 1
 _C.TASK = CN()
 # Task key defines the dataloader to use, and affects the model head.
 _C.TASK.KEY = "sinusoid"
+_C.TASK.NUM_NODES = 10 # Define task nodes (will modify dataset, and verify compatible model)
+_C.TASK.INPUT_SIZE = 1
 
 _C.DATA = CN()
 _C.DATA.DATAPATH = 'data/'
@@ -52,9 +54,8 @@ _C.DATA.OVERFIT_TEST = False
 _C.MODEL = CN()
 _C.MODEL.NAME = "SeqSeq"
 _C.MODEL.HIDDEN_SIZE = 16
-_C.MODEL.INPUT_SIZE = 4
 _C.MODEL.NUM_STEPS = 50 # ! Revisit this. This will entirely depend on the task...
-_C.MODEL.GRAPH_FILE = "configs/graphs/"
+_C.MODEL.GRAPH_FILE = "data/configs/graphs/"
 
 _C.MODEL.DROPOUT = .1
 _C.MODEL.INDEPENDENT_DYNAMICS = False # Do nodes have independent GRU parameters?
@@ -68,8 +69,8 @@ _C.TRAIN = CN()
 _C.TRAIN.DO_VAL = True # Run validation while training
 _C.TRAIN.DO_R2 = True # Run validation while training
 
-_C.TRAIN.BATCH_SIZE = 500
-_C.TRAIN.NUM_UPDATES = 10000 # Max updates
+_C.TRAIN.BATCH_SIZE = 32
+_C.TRAIN.NUM_UPDATES = 10000 # Max updates (epochs)
 _C.TRAIN.MAX_GRAD_NORM = 200.0
 
 _C.TRAIN.LR = CN()

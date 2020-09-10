@@ -53,7 +53,7 @@ class Runner:
             Setup model, assign to device.
         """
         self.load_device()
-        self.model = get_model_class(self.config.MODEL.NAME)(self.config.MODEL, self.device)
+        self.model = get_model_class(self.config.MODEL.NAME)(self.config.MODEL, self.config.TASK, self.device)
         if self.num_gpus > 1:
             if self.config.SYSTEM.GPU_AUTO_ASSIGN:
                 gpu_indices = get_lightest_gpus(self.num_gpus)
@@ -148,14 +148,14 @@ class Runner:
 
         dataset_cls = DatasetRegistry.get_dataset(task_cfg.KEY)
 
-        training_set = dataset_cls(self.config, self.config.DATA.TRAIN_FILENAME, task_cfg.KEY, mode="train")
+        training_set = dataset_cls(self.config, self.config.DATA.TRAIN_FILENAME, task_cfg, mode="train")
         training_generator = torchData.DataLoader(training_set,
             batch_size=train_cfg.BATCH_SIZE, shuffle=True
         )
 
         if train_cfg.DO_VAL:
             # * We assume val is small enough that we don't need a generator
-            validation_set = dataset_cls(self.config, self.config.DATA.VAL_FILENAME, task_cfg.KEY, mode="val")
+            validation_set = dataset_cls(self.config, self.config.DATA.VAL_FILENAME, task_cfg, mode="val")
 
         self.optimizer = optim.AdamW(
             list(filter(lambda p: p.requires_grad, self._get_parameters())),
@@ -194,7 +194,7 @@ class Runner:
             # warmup_updates = 1
             lr_scheduler = optim.lr_scheduler.LambdaLR(
                 self.optimizer,
-                lambda x: linear_decay(x, self.config.NUM_UPDATES)
+                lambda x: linear_decay(x, train_cfg.NUM_UPDATES)
                 # warmup_steps=steps_per_update * warmup_updates,
                 # t_total=steps_per_update * train_cfg.NUM_UPDATES,
                 # cycles=train_cfg.LR.RESTARTS
@@ -218,10 +218,11 @@ class Runner:
                     count_checkpoints += 1
                 t_start = time.time()
                 self.model.train()
-                for data, labels in training_generator:
-                    data = data.to(self.device)
-                    labels = labels.to(self.device)
-                    loss = self.model(data, labels)
+                for x, targets, masks in training_generator:
+                    x = x.to(self.device)
+                    targets = targets.to(self.device)
+                    masks = masks.to(self.device)
+                    loss = self.model(x, targets, masks)
                     loss = loss.mean()
 
                     if self.optimizer is not None:
@@ -256,10 +257,11 @@ class Runner:
                 if train_cfg.DO_VAL and update % train_cfg.VAL_INTERVAL == 0:
                     self.model.eval()
                     with torch.no_grad():
-                        data, labels = validation_set.get_dataset()
-                        data = data.to(self.device)
-                        labels = labels.to(self.device)
-                        loss, *_ = self.model(data, labels)
+                        x, targets, masks = validation_set.get_dataset()
+                        x = x.to(self.device)
+                        targets = targets.to(self.device)
+                        masks = masks.to(self.device)
+                        loss = self.model(x, targets, masks)
 
                         val_loss = loss.mean()
 

@@ -27,7 +27,7 @@ class TemporalNetworkDataset(data.Dataset):
     HAS_AGGREGATE_TARGET = False
     HAS_NODE_TARGET = True
 
-    def __init__(self, config, filename, task_key, mode="train"):
+    def __init__(self, config, filename, task_cfg, mode="train"):
         r"""
             args:
                 config: dataset config
@@ -35,21 +35,23 @@ class TemporalNetworkDataset(data.Dataset):
                 mode: "train" or "val"
         """
         super().__init__()
+
+        self.inputs = None
+        self.targets = None
+        self.masks = None
+
         logger.info(f"Loading {filename}")
         self.config = config.DATA
         self.datapath = osp.join(self.config.DATAPATH, filename)
         split_path = self.datapath.split(".")
         if split_path[-1] == "pth":
             dataset_dict = torch.load(self.datapath)
-            if "task_key" not in dataset_dict or dataset_dict["task_key"] != task_key:
-                raise Exception(f"Unexpected dataset task {dataset_dict['task_key']}. Expected configured task {task_key}")
-            self._initialize_dataset(dataset_dict)
+            if "key" not in dataset_dict or dataset_dict["key"] != task_cfg.KEY:
+                raise Exception(f"Unexpected dataset task {dataset_dict['key']}. Expected configured task {task_cfg.KEY}")
+            self._initialize_dataset(dataset_dict, task_cfg)
         else:
             raise Exception(f"Unknown dataset extension {split_path[-1]}")
 
-        self.inputs = None
-        self.targets = None
-        self.masks = None
         if config.DATA.OVERFIT_TEST:
             # Assuming batch dim 0
             self.inputs = self.inputs[:10]
@@ -57,11 +59,12 @@ class TemporalNetworkDataset(data.Dataset):
             self.masks = self.masks[:10]
 
     @abc.abstractmethod
-    def _initialize_dataset(self, dataset_dict):
+    def _initialize_dataset(self, dataset_dict, task_cfg):
         r"""
             Load inputs, targets, and masks.
             Args:
                 dataset_dict: raw payload from dataset
+                task_cfg: task spec defining data to load
         """
         pass
 
@@ -95,7 +98,7 @@ class SinusoidDataset(TemporalNetworkDataset):
 
         See `data/sinusoid.py` for generation.
     """
-    def _initialize_dataset(self, dataset_dict):
+    def _initialize_dataset(self, dataset_dict, task_cfg):
         r"""
             Data Contract:
                 data: total signal. Shaped B x N x T
@@ -105,14 +108,15 @@ class SinusoidDataset(TemporalNetworkDataset):
         """
         warmup_period = dataset_dict['warmup_period']
         trial_period = dataset_dict['trial_period']
-        sin_data = dataset_dict['data'][:warmup_period + trial_period].permute(1, 0, 2).unsqueeze(1) # Now shaped B x T x N x 1
+        sin_data = dataset_dict['data'][..., :warmup_period + trial_period] # B x N x T
+        sin_data = sin_data[:, :task_cfg.NUM_NODES] # B x N x T
+        sin_data = sin_data.permute(0, 2, 1).unsqueeze(-1) # Now shaped B x T x N x 1
 
         self.inputs = sin_data.clone()
-        self.inputs[..., warmup_period:] = 0
+        self.inputs[:, warmup_period:] = 0
         self.targets = sin_data.clone()
-        self.masks = torch.ones_like(self.targets)
-        self.masks[..., :warmup_period] = 0
-
+        self.masks = torch.ones_like(self.targets, dtype=torch.bool)
+        self.masks[:, :warmup_period] = 0
 
 class DatasetRegistry:
     _registry = {
