@@ -23,15 +23,12 @@ import torch.nn as nn
 torch.set_grad_enabled(False)
 
 r"""
-Sinusoidal task definition.
-Each node is responsible for predicting the output of a sinusoid parameterized by a speed and phase.
-Each node is given K=3 steps of a random sinusoid with frequency < 1 Hz.
-The node predicts the sinusoid for T=20 timesteps.
-The Nyquist-Shannon Sampling Theorem from DSP suggests these samples should define a unique sinusoid (that can be constructed).
-TODO confirm ^ with someone who understands signals.
-
-The error is minimized by a function that appropriately derives the underlying function given the samples.
-The sinusoids can be noised to make the task slightly harder and less-defined.
+See `SinusoidDataset` in `src/dataset` for context + usage.
+Data Contract:
+    data: total signal. Shaped B x N x T
+    warmup_period: int for feedin timesteps
+    trial_period: int for output timesteps
+    We should have warmup_period + trial_period = T.
 """
 
 def sinusoidal_generator(
@@ -69,11 +66,12 @@ n = 1000
 train_n = 800
 val_n = n - train_n
 
-# TODO: Make data
+warmup_period = 3
+trial_period = 20
 data = sinusoidal_generator(
     dim=20,
     sigma=0.1,
-    trial_length=20,
+    trial_length=warmup_period + trial_period,
     num_trials=n
 )
 
@@ -82,5 +80,15 @@ train_data, val_data = torch.split(data, (train_n, val_n))
 data_dir = "/nethome/jye72/projects/noised-rnn-networks/data"
 os.makedirs(data_dir, exist_ok=True)
 
-torch.save(train_data, osp.join(data_dir, "sin_train.pth"))
-torch.save(val_data, osp.join(data_dir, "sin_val.pth"))
+train_dict = dict(
+    warmup_period=warmup_period,
+    trial_period=trial_period,
+    data=train_data
+)
+val_dict = dict(
+    warmup_period=warmup_period,
+    trial_period=trial_period,
+    data=val_data
+)
+torch.save(train_dict, osp.join(data_dir, "sin_train.pth"))
+torch.save(val_dict, osp.join(data_dir, "sin_val.pth"))

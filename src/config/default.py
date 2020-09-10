@@ -26,7 +26,8 @@ _C.LOG_DIR = "logs/"
 # -----------------------------------------------------------------------------
 _C.SYSTEM = CN()
 _C.SYSTEM.TORCH_GPU_ID = 0
-_C.SYSTEM.GPU_AUTO_ASSIGN = True # Auto-assign
+# Auto-assign if you have free reign to GPUs. False if you're in a managed cluster that assigns GPUs.
+_C.SYSTEM.GPU_AUTO_ASSIGN = False
 _C.SYSTEM.NUM_GPUS = 1
 
 # -----------------------------------------------------------------------------

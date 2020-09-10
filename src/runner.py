@@ -11,8 +11,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from pytorch_transformers import AdamW, WarmupCosineWithHardRestartsSchedule
 from torch.utils import data
+# from pytorch_transformers import AdamW, WarmupCosineWithHardRestartsSchedule
 
 from src import (
     get_model_class,
@@ -26,6 +26,17 @@ from src.dataset import NetworkDataset
 Runner class orchestrates model usage.
 TODO: implement
 """
+def linear_decay(epoch: int, total_num_updates: int) -> float:
+    r"""Returns a multiplicative factor for linear value decay
+
+    Args:
+        epoch: current epoch number
+        total_num_updates: total number of
+
+    Returns:
+        multiplicative factor that decreases param value linearly
+    """
+    return 1 - (epoch / float(total_num_updates))
 
 def get_lightest_gpus(num_gpus):
     os.system('nvidia-smi -q -d Memory |grep -A4 GPU|grep Free >tmp')
@@ -41,6 +52,7 @@ class Runner:
         self.aux_task_names = []
         self.optimizer = None
         self.device = None
+        self.device_gpu = None
         self.num_gpus = 0
         if not osp.exists(config.LOG_DIR):
             os.makedirs(config.LOG_DIR, exist_ok=True)
@@ -52,8 +64,12 @@ class Runner:
             "update": -1,
         }
 
-    def setup_model(self, device):
-        self.model = get_model_class(self.config.MODEL.NAME)(self.config.MODEL, device)
+    def setup_model(self):
+        r"""
+            Setup model, assign to device.
+        """
+        self.load_device()
+        self.model = get_model_class(self.config.MODEL.NAME)(self.config.MODEL, self.device)
         if self.num_gpus > 1:
             if self.config.SYSTEM.GPU_AUTO_ASSIGN:
                 gpu_indices = get_lightest_gpus(self.num_gpus)
@@ -65,7 +81,7 @@ class Runner:
                 gpu_indices = gpu_indices[:-1]
             gpu_indices = [self.device_gpu] + gpu_indices # Make sure our primary gpu is first
             self.model = nn.DataParallel(self.model, device_ids=gpu_indices)
-        self.model = self.model.to(device)
+        self.model = self.model.to(self.device)
 
     def _get_parameters(self):
         return self.model.parameters()
@@ -112,6 +128,9 @@ class Runner:
         return torch.load(checkpoint_path, *args, **kwargs)
 
     def load_device(self):
+        r"""
+            Load primary device.
+        """
         if not torch.cuda.is_available():
             self.device = torch.device("cpu")
         else:
@@ -120,6 +139,8 @@ class Runner:
             gpu_id = self.config.SYSTEM.TORCH_GPU_ID
             if self.config.SYSTEM.GPU_AUTO_ASSIGN:
                 gpu_id = get_lightest_gpus(1)[0]
+            elif self.num_gpus > 1:
+                raise Exception("Can't specify more than one GPU without auto-assign.")
             self.device = (
                 torch.device("cuda", gpu_id)
             )
@@ -136,7 +157,7 @@ class Runner:
         Returns:
             None
         """
-        self.load_device()
+        self.setup_model()
 
         train_cfg = self.config.TRAIN
         training_set = NetworkDataset(self.config, self.config.DATA.TRAIN_FILENAME, mode="train")
@@ -145,9 +166,10 @@ class Runner:
         )
 
         if train_cfg.DO_VAL:
+            # * We assume val is small enough that we don't need a generator
             validation_set = NetworkDataset(self.config, self.config.DATA.VAL_FILENAME, mode="val")
 
-        self.optimizer = AdamW(
+        self.optimizer = optim.AdamW(
             list(filter(lambda p: p.requires_grad, self._get_parameters())),
             lr=train_cfg.LR.INIT,
             weight_decay=train_cfg.WEIGHT_DECAY,
@@ -182,11 +204,12 @@ class Runner:
         if self.optimizer is not None and train_cfg.LR.SCHEDULE:
             steps_per_update = len(training_set) / self.config.DATA.BATCH_SIZE
             warmup_updates = 1
-            lr_scheduler = WarmupCosineWithHardRestartsSchedule(
+            lr_scheduler = optim.lr_scheduler(
                 self.optimizer,
-                warmup_steps=steps_per_update * warmup_updates,
-                t_total=steps_per_update * train_cfg.NUM_UPDATES,
-                cycles=train_cfg.LR.RESTARTS
+                lambda x: linear_decay(x, self.config.NUM_UPDATES)
+                # warmup_steps=steps_per_update * warmup_updates,
+                # t_total=steps_per_update * train_cfg.NUM_UPDATES,
+                # cycles=train_cfg.LR.RESTARTS
             )
 
         start_updates = count_updates
@@ -248,7 +271,6 @@ class Runner:
                         data, labels = validation_set.get_dataset()
                         data = data.to(self.device)
                         labels = labels.to(self.device)
-                        # Aux losses are ignored in val
                         loss, *_ = self.model(data, labels)
 
                         val_loss = loss.mean()

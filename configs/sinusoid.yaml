@@ -1,0 +1,5 @@
+CHECKPOINT_DIR: "/home/joel/"
+DATA:
+  DATAPATH: "/nethome/jye72/projects/noised-rnn-networks/data"
+  TRAIN_FILENAME: "sin_train.pth"
+  VAL_FILENAME: "sin_val.pth"
