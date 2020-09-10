@@ -38,7 +38,7 @@ TASK_KEY = "sinusoid"
 def sinusoidal_generator(
     seed=0,
     dim=10,
-    sigma=0.1,
+    noise_scale=0.1,
     trial_length=20,
     num_trials=1000
 ):
@@ -54,32 +54,38 @@ def sinusoidal_generator(
     speed = torch.rand((num_trials, dim, 1))
     line = speed * torch.arange(trial_length) + phase
     sin_data = torch.sin(line)
-    noise = torch.rand_like(sin_data) * sigma
-    return sin_data + noise
+    noise = torch.rand_like(sin_data) * noise_scale
+    return sin_data, sin_data + noise
 
 #%%
 # Plot data sample to sanity check
-data = sinusoidal_generator(num_trials=2)
+data, noised_data = sinusoidal_generator(num_trials=2)
 print(data.size())
 for node_data in data[0]:
     plt.plot(node_data)
 
 #%%
 # Generate and save data
-n = 1000
-train_n = 800
+n = 10000
+train_n = 8000
 val_n = n - train_n
 
 warmup_period = 3
 trial_period = 20
-data = sinusoidal_generator(
+data, noised_data = sinusoidal_generator(
     dim=20,
-    sigma=0.1,
+    noise_scale=0.1,
     trial_length=warmup_period + trial_period,
     num_trials=n
 )
 
+oracle_error = noised_data[..., warmup_period:] - data[..., warmup_period:]
+oracle_mse = 0.5 * oracle_error.pow(2).mean()
+print(f"Oracle MSE: {oracle_mse}")
+# 0.0017
+
 train_data, val_data = torch.split(data, (train_n, val_n))
+train_noised_data, val_noised_data = torch.split(noised_data, (train_n, val_n))
 
 data_dir = "/nethome/jye72/projects/noised-rnn-networks/data"
 os.makedirs(data_dir, exist_ok=True)
@@ -88,13 +94,15 @@ train_dict = dict(
     key=TASK_KEY,
     warmup_period=warmup_period,
     trial_period=trial_period,
-    data=train_data
+    data=train_noised_data,
+    clean_data=train_data,
 )
 val_dict = dict(
     key=TASK_KEY,
     warmup_period=warmup_period,
     trial_period=trial_period,
-    data=val_data
+    data=val_noised_data,
+    clean_data=val_data
 )
 torch.save(train_dict, osp.join(data_dir, "sin_train.pth"))
 torch.save(val_dict, osp.join(data_dir, "sin_val.pth"))

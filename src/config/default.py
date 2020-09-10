@@ -47,13 +47,14 @@ _C.DATA.TRAIN_FILENAME = 'train.pth'
 _C.DATA.VAL_FILENAME = 'val.pth'
 _C.DATA.TEST_FILENAME = 'test.pth'
 _C.DATA.OVERFIT_TEST = False
+_C.DATA.USE_ORACLE = False # In case we need it, add slot for oracle information in dataset
 
 # -----------------------------------------------------------------------------
 # Model
 # -----------------------------------------------------------------------------
 _C.MODEL = CN()
 _C.MODEL.NAME = "SeqSeq"
-_C.MODEL.HIDDEN_SIZE = 16
+_C.MODEL.HIDDEN_SIZE = 32
 _C.MODEL.NUM_STEPS = 50 # ! Revisit this. This will entirely depend on the task...
 _C.MODEL.GRAPH_FILE = "data/configs/graphs/"
 
@@ -83,7 +84,7 @@ _C.TRAIN.PATIENCE = 500  # early stopping
 _C.TRAIN.RAMP_PEEK = True
 
 _C.TRAIN.CHECKPOINT_INTERVAL = 1000
-_C.TRAIN.LOG_INTERVAL = 50
+_C.TRAIN.LOG_INTERVAL = 10
 _C.TRAIN.VAL_INTERVAL = 10 # Val less often so things run faster
 
 

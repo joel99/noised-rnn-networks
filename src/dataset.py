@@ -39,6 +39,7 @@ class TemporalNetworkDataset(data.Dataset):
         self.inputs = None
         self.targets = None
         self.masks = None
+        # self.oracle = None # Oracle information
 
         logger.info(f"Loading {filename}")
         self.config = config.DATA
@@ -57,6 +58,7 @@ class TemporalNetworkDataset(data.Dataset):
             self.inputs = self.inputs[:10]
             self.targets = self.targets[:10]
             self.masks = self.masks[:10]
+            # self.oracle = self.oracle[:10] if self.config.USE_ORACLE else None
 
     @abc.abstractmethod
     def _initialize_dataset(self, dataset_dict, task_cfg):
@@ -79,10 +81,20 @@ class TemporalNetworkDataset(data.Dataset):
                 target: B x T x H_out or B x T x N x H_out
                 mask: B x T or B x T x N
         """
-        return self.inputs[index], self.targets[index], self.masks[index]
+        return (
+            self.inputs[index],
+            self.targets[index],
+            self.masks[index],
+            # self.oracle[index] if self.config.USE_ORACLE else None
+        )
 
     def get_dataset(self):
-        return self.inputs, self.targets, self.masks
+        return (
+            self.inputs,
+            self.targets,
+            self.masks,
+            # self.oracle if self.config.USE_ORACLE else None
+        )
 
 class SinusoidDataset(TemporalNetworkDataset):
     r"""
@@ -117,6 +129,11 @@ class SinusoidDataset(TemporalNetworkDataset):
         self.targets = sin_data.clone()
         self.masks = torch.ones_like(self.targets, dtype=torch.bool)
         self.masks[:, :warmup_period] = 0
+
+        # if self.config.USE_ORACLE:
+            # oracle = dataset_dict['clean_data'][..., :warmup_period + trial_period]
+            # oracle = oracle[:, :task_cfg.NUM_NODES]
+            # self.oracle = oracle.permute(0, 2, 1).unsqueeze(-1)
 
 class DatasetRegistry:
     _registry = {
