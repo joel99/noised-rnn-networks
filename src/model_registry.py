@@ -2,12 +2,10 @@
 # Author: Joel Ye
 
 from src.model import (
-    GraphRNN,
     SeqSeqModel
 )
 
 MODELS = {
-    "GraphRNN": GraphRNN,
     "SeqSeq": SeqSeqModel
 }
 

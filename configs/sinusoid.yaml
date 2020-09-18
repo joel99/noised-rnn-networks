@@ -3,6 +3,8 @@ DATA:
   DATAPATH: "/nethome/jye72/projects/noised-rnn-networks/data"
   TRAIN_FILENAME: "sin_train.pth"
   VAL_FILENAME: "sin_val.pth"
+TASK:
+  KEY: "sinusoid"
 MODEL:
   GRAPH_FILE: "configs/graphs/n10_p0.6_test.edgelist"
 TRAIN:

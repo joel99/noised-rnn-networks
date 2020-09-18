@@ -81,7 +81,11 @@ data, noised_data = sinusoidal_generator(
 
 oracle_error = noised_data[..., warmup_period:] - data[..., warmup_period:]
 oracle_mse = 0.5 * oracle_error.pow(2).mean()
+
 print(f"Oracle MSE: {oracle_mse}")
+noisy_error = noised_data[..., warmup_period:] - (data + torch.rand_like(data) * 0.1)[..., warmup_period:]
+noisy_mse = 0.5 * noisy_error.pow(2).mean()
+print(noisy_mse)
 # 0.0017
 
 train_data, val_data = torch.split(data, (train_n, val_n))

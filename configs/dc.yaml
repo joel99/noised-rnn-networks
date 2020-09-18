@@ -1,0 +1,18 @@
+# Not quite working well. We should sweep in the meantime to try to get this working.
+CHECKPOINT_DIR: "/nethome/jye72/share/noised-rnn-networks/"
+DATA:
+  DATAPATH: "/nethome/jye72/projects/noised-rnn-networks/data"
+  TRAIN_FILENAME: "dc_train.pth"
+  VAL_FILENAME: "dc_val.pth"
+  # OVERFIT_TEST: True
+TASK:
+  KEY: "density_classification"
+  NUM_NODES: 149
+MODEL:
+  GRAPH_FILE: "configs/graphs/n149_p0.033_dc.edgelist"
+  HIDDEN_SIZE: 32
+TRAIN:
+  BATCH_SIZE: 32
+  LR:
+    INIT: 1e-4
+  WEIGHT_DECAY: 0.001

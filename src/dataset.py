@@ -2,6 +2,7 @@
 # Author: Joel Ye
 import os.path as osp
 import abc
+import math
 
 import torch
 from torch.utils import data
@@ -63,7 +64,7 @@ class TemporalNetworkDataset(data.Dataset):
     @abc.abstractmethod
     def _initialize_dataset(self, dataset_dict, task_cfg):
         r"""
-            Load inputs, targets, and masks.
+            Load inputs, targets, and masks, (shaped as in `__getitem__`)
             Args:
                 dataset_dict: raw payload from dataset
                 task_cfg: task spec defining data to load
@@ -135,9 +136,37 @@ class SinusoidDataset(TemporalNetworkDataset):
             # oracle = oracle[:, :task_cfg.NUM_NODES]
             # self.oracle = oracle.permute(0, 2, 1).unsqueeze(-1)
 
+class DensityClassificationDataset(TemporalNetworkDataset):
+    r"""
+        Density Classification task definition, modified from http://csc.ucdavis.edu/~evca/Papers/evca-review.pdf
+        Each node is given an initial binary state.
+        At timestep T, nodes predict the majority initial state (e.g. 1 if more than half of initial states are 1.)
+
+        The network should be able to learn to store a local state and communicate until a global state is determined.
+
+        See `data/density_classification.py` for generation.
+    """
+    def _initialize_dataset(self, dataset_dict, task_cfg):
+        r"""
+            Data Contract:
+                data: total signal. Shaped B x N
+        """
+        # Calculate T (depends on diameter of network..)
+        initial_states = dataset_dict["data"][:, :task_cfg.NUM_NODES]
+        B, N = initial_states.size()
+        T = int(3 * math.log(N) / math.log(2)) # For N from 149 to 999, this is around 20 - 30 timesteps.
+        # We require our graphs to be fully connected, for simplicity, so the true diameter is shorter (6-10).
+        # So this should be ample computation time?
+        self.inputs = torch.zeros((B, T, N, 1))
+        self.inputs[:, 0] = initial_states.view(B, N, 1)
+        self.targets = (torch.sum(initial_states, dim=1) > (N / 2)).view(B, 1, 1, 1).expand(B, T, N, 1).float()
+        self.masks = torch.zeros_like(self.targets, dtype=torch.bool)
+        self.masks[:, T-1] = 1
+
 class DatasetRegistry:
     _registry = {
-        "sinusoid": SinusoidDataset
+        "sinusoid": SinusoidDataset,
+        "density_classification": DensityClassificationDataset
     }
 
     @classmethod

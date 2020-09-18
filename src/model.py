@@ -14,8 +14,7 @@ from torch.nn import Parameter as Param
 from torch_sparse import SparseTensor, matmul
 from torch_geometric.nn.conv import MessagePassing
 
-
-from src import logger
+from src import logger, TaskRegistry
 
 class GraphRNN(MessagePassing):
     r"""
@@ -99,21 +98,32 @@ class GraphRNN(MessagePassing):
                                               self.out_channels,
                                               self.num_layers)
 
-"""
-It's a bit messy to specify T_input and T_target in a generic way.
-Instead, we'll build out separate models for each use case.
-"""
-
 class SeqSeqModel(nn.Module):
     def __init__(self, config, task_cfg, device):
         super().__init__()
+        self.key = task_cfg.KEY
         self.hidden_size = config.HIDDEN_SIZE
         self.device = device
         self.duplicate_inputs = False
-        # TODO (duplicate) add duplicate module dependent on dataset configuration
         self.graphrnn = GraphRNN(config, task_cfg, device)
-        self.readout = nn.Linear(self.hidden_size, 1) # depends on the task... this is per node for example
-        # TODO (mnist) add a module for aggregate readout here
+        self.init_readout()
+        # TODO (mnist) add a module for aggregate readin, aggregate readout here
+
+    def init_readout(self):
+        if self.key == TaskRegistry.SINUSOID:
+            self.readout = nn.Linear(self.hidden_size, 1)
+        elif self.key == TaskRegistry.DENSITY_CLASS:
+            self.readout = nn.Linear(self.hidden_size, 1)
+        elif self.key == TaskRegistry.SEQ_MNIST:
+            self.readout = nn.Linear(self.hidden_size * self.graphrnn.n, 1)
+
+    def get_loss(self, outputs, targets):
+        if self.key == TaskRegistry.SINUSOID:
+            return 0.5 * (outputs - targets).pow(2)
+        if self.key == TaskRegistry.DENSITY_CLASS:
+            return F.binary_cross_entropy_with_logits(outputs, targets)
+        if self.key == TaskRegistry.SEQ_MNIST:
+            return F.binary_cross_entropy_with_logits(outputs, targets)
 
     def forward(self,
         x,
@@ -133,8 +143,7 @@ class SeqSeqModel(nn.Module):
         """
         if input_mask is None and x.size(1) != targets.size(1):
             raise Exception(f"Input ({x.size(1)}) and targets ({targets.size(1)}) misaligned.")
-
-        state = torch.zeros(x.size(0), x.size(2), self.hidden_size, device=self.device) # TODO optionally make learnable
+        state = torch.zeros(x.size(0), x.size(2), self.hidden_size, device=self.device)
         all_states = [state]
         outputs = []
         for i in range(x.size(1)):
@@ -144,7 +153,6 @@ class SeqSeqModel(nn.Module):
             output = self.readout(state) # B x N x 1
             outputs.append(output)
         outputs = torch.stack(outputs, 1) # B x T x N x 1
-        error = outputs - targets
-        mse = 0.5 * error.pow(2)
-        mse_loss = torch.masked_select(mse, targets_mask)
-        return mse_loss.mean()
+        loss = self.get_loss(outputs, targets)
+        loss = torch.masked_select(loss, targets_mask)
+        return loss.mean()

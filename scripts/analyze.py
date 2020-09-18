@@ -32,3 +32,4 @@ from src.runner import Runner
 from analyze_utils import init
 
 # TODO
+ckpt_path = "/nethome/jye72/share/noised-rnn-networks/sinusoid"
