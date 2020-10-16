@@ -1,0 +1,18 @@
+CHECKPOINT_DIR: "/nethome/jye72/share/noised-rnn-networks/"
+DATA:
+  DATAPATH: "/nethome/jye72/projects/noised-rnn-networks/data"
+  TRAIN_FILENAME: ""
+  VAL_FILENAME: ""
+TASK:
+  KEY: "seq_mnist"
+  NUM_STEPS: 50
+  AGGREGATE_INPUT: True
+  AGGREGATE_OUTPUT: True
+MODEL:
+  GRAPH_FILE: "configs/graphs/n10_p0.6_test.edgelist"
+TRAIN:
+  LR:
+    INIT: 1.0e-3
+  BATCH_SIZE: 32
+  LOG_INTERVAL: 1
+  VAL_INTERVAL: 1

@@ -148,14 +148,17 @@ class Runner:
 
         dataset_cls = DatasetRegistry.get_dataset(task_cfg.KEY)
 
-        training_set = dataset_cls(self.config, self.config.DATA.TRAIN_FILENAME, task_cfg, mode="train")
+        training_set = dataset_cls(self.config, task_cfg, filename=self.config.DATA.TRAIN_FILENAME, mode="train")
         training_generator = torchData.DataLoader(training_set,
             batch_size=train_cfg.BATCH_SIZE, shuffle=True
         )
 
         if train_cfg.DO_VAL:
             # * We assume val is small enough that we don't need a generator
-            validation_set = dataset_cls(self.config, self.config.DATA.VAL_FILENAME, task_cfg, mode="val")
+            validation_set = dataset_cls(self.config, task_cfg, filename=self.config.DATA.VAL_FILENAME, mode="val")
+            validation_generator = torchData.DataLoader(validation_set,
+                batch_size=train_cfg.BATCH_SIZE, shuffle=False
+            )
 
         self.optimizer = optim.AdamW(
             list(filter(lambda p: p.requires_grad, self._get_parameters())),
@@ -257,13 +260,14 @@ class Runner:
                 if train_cfg.DO_VAL and update % train_cfg.VAL_INTERVAL == 0:
                     self.model.eval()
                     with torch.no_grad():
-                        x, targets, masks = validation_set.get_dataset()
-                        x = x.to(self.device)
-                        targets = targets.to(self.device)
-                        masks = masks.to(self.device)
-                        loss = self.model(x, targets, masks)
-
-                        val_loss = loss.mean()
+                        val_losses = []
+                        for x, targets, masks in validation_generator:
+                            x = x.to(self.device)
+                            targets = targets.to(self.device)
+                            masks = masks.to(self.device)
+                            loss = self.model(x, targets, masks)
+                            val_losses.append(loss.mean())
+                        val_loss = sum(val_losses) / len(val_losses) # Won't play well with uneven batches but that's low-priority
 
                         writer.add_scalar(
                             "val_loss",

@@ -40,6 +40,11 @@ _C.TASK = CN()
 _C.TASK.KEY = "sinusoid"
 _C.TASK.NUM_NODES = 10 # Define task nodes (will modify dataset, and verify compatible model)
 _C.TASK.INPUT_SIZE = 1
+# For tasks where evaluation happens after some processing time, this defines the evaluation timestep.
+# If -1, will default to a task default.
+_C.TASK.NUM_STEPS = -1
+_C.TASK.AGGREGATE_INPUT = False # Technically these belong to task, but I'm exposing here for convenience
+_C.TASK.AGGREGATE_OUTPUT = False
 
 _C.DATA = CN()
 _C.DATA.DATAPATH = 'data/'
@@ -55,7 +60,6 @@ _C.DATA.USE_ORACLE = False # In case we need it, add slot for oracle information
 _C.MODEL = CN()
 _C.MODEL.NAME = "SeqSeq"
 _C.MODEL.HIDDEN_SIZE = 32
-_C.MODEL.NUM_STEPS = 50 # ! Revisit this. This will entirely depend on the task...
 _C.MODEL.GRAPH_FILE = "data/configs/graphs/"
 
 _C.MODEL.DROPOUT = .1

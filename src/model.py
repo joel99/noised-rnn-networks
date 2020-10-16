@@ -43,9 +43,9 @@ class GraphRNN(MessagePassing):
         # Note - this is inherently directed
         self.graph = torch.tensor(list(G.edges), dtype=torch.long, device=device).permute(1, 0) # edge_index
 
+        self.n = len(G)
         # We may do experiments with fixed dynamics across nodes
         if config.INDEPENDENT_DYNAMICS:
-            self.n = len(G)
             self.rnns = nn.ModuleList([
                 nn.GRUCell(config.INPUT_SIZE, self.hidden_size) for _ in range(self.n)
             ])
@@ -62,12 +62,16 @@ class GraphRNN(MessagePassing):
             Will create messages from state and message neighbors.
             Nodes step recurrent state based on messages and input, if available.
             Args:
-                inputs: B x N x input_size or None
+                inputs: B x N x input_size or B x input_size
                 state: node state. B x N x h
             Returns:
                 state: node state. B x N x h
         """
-        b, n, _ = state.size()
+        b = state.size(0)
+        if len(inputs.size()) == 2:
+            inputs = inputs.unsqueeze(1).expand(inputs.size(0), self.n, inputs.size(-1))
+        else:
+            assert state.size(1) == self.n
         m = self.state_to_message(state)
         m = self.propagate(self.graph, x=m)
         if inputs is not None:
@@ -80,7 +84,7 @@ class GraphRNN(MessagePassing):
             state = torch.stack(rnn_states, dim=1)
         else:
             # B x N x H, B x N x H. Gru cell only supports 1 batch dim,
-            state = self.rnn(m.view(-1, self.hidden_size), state.view(-1, self.hidden_size)).view(b, n, -1)
+            state = self.rnn(m.view(-1, self.hidden_size), state.view(-1, self.hidden_size)).view(b, self.n, -1)
         return state
 
     # Note - x_j is source, x_i is target
@@ -97,6 +101,24 @@ class GraphRNN(MessagePassing):
         return '{}({}, num_layers={})'.format(self.__class__.__name__,
                                               self.out_channels,
                                               self.num_layers)
+
+class PooledReadout(nn.Module):
+    # Categorical for MNIST
+    def __init__(self, hidden_size, n):
+        super().__init__()
+        self.pool = nn.MaxPool1d(n)
+        self.out = nn.Linear(hidden_size, 10)
+
+    def forward(self, x):
+        # B x N x H -> B x 1
+        return self.out(self.pool(x.permute(0, 2, 1)).squeeze(-1))
+
+class PermutedCE(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.criterion = nn.CrossEntropyLoss()
+    def forward(self, inputs, targets): # 3-dim input to C in last dim to C in second
+        return self.criterion(inputs.permute(0, 2, 1), targets)
 
 class SeqSeqModel(nn.Module):
     def __init__(self, config, task_cfg, device):
@@ -115,7 +137,8 @@ class SeqSeqModel(nn.Module):
         elif self.key == TaskRegistry.DENSITY_CLASS:
             self.readout = nn.Linear(self.hidden_size, 1)
         elif self.key == TaskRegistry.SEQ_MNIST:
-            self.readout = nn.Linear(self.hidden_size * self.graphrnn.n, 1)
+            self.readout = PooledReadout(self.hidden_size, self.graphrnn.n)
+            self.criterion = PermutedCE()
 
     def get_loss(self, outputs, targets):
         if self.key == TaskRegistry.SINUSOID:
@@ -123,7 +146,22 @@ class SeqSeqModel(nn.Module):
         if self.key == TaskRegistry.DENSITY_CLASS:
             return F.binary_cross_entropy_with_logits(outputs, targets)
         if self.key == TaskRegistry.SEQ_MNIST:
-            return F.binary_cross_entropy_with_logits(outputs, targets)
+            return self.criterion(outputs, targets)
+
+    def preprocess_inputs(self, x, targets, targets_mask):
+        r""" Batched input processing (mainly for MNIST)
+            x: B x Raw (e.g 1 x H x W)
+            targets: B x Raw (e.g. L)
+            targets_mask: B x T, B x T x N
+        """
+        if self.key == TaskRegistry.SEQ_MNIST:
+            img = F.interpolate(x, (7, 7)) # B x 1 x H x W # Super low-res
+            seq_img = torch.flatten(img, start_dim=1) # B x T
+            seq_label = torch.zeros_like(seq_img, dtype=torch.long)
+            seq_label[:, -1] = targets
+            return seq_img.unsqueeze(-1), seq_label, targets_mask
+        else:
+            return x, targets, targets_mask
 
     def forward(self,
         x,
@@ -141,18 +179,19 @@ class SeqSeqModel(nn.Module):
             # Not supported
             input_mask: B x T x N. Ignore input when x = 1. ! Don't think supporting B is posssible.
         """
+        x, targets, targets_mask = self.preprocess_inputs(x, targets, targets_mask)
         if input_mask is None and x.size(1) != targets.size(1):
             raise Exception(f"Input ({x.size(1)}) and targets ({targets.size(1)}) misaligned.")
-        state = torch.zeros(x.size(0), x.size(2), self.hidden_size, device=self.device)
+        state = torch.zeros(x.size(0), self.graphrnn.n, self.hidden_size, device=self.device)
         all_states = [state]
         outputs = []
-        for i in range(x.size(1)):
+        for i in range(x.size(1)): # Time
             state = self.graphrnn(x[:, i], state)
             if log_state:
                 all_states.append(state)
-            output = self.readout(state) # B x N x 1
+            output = self.readout(state) # B x N x H or B x H
             outputs.append(output)
-        outputs = torch.stack(outputs, 1) # B x T x N x 1
+        outputs = torch.stack(outputs, 1) # B x T x N x H or B x T x H
         loss = self.get_loss(outputs, targets)
         loss = torch.masked_select(loss, targets_mask)
         return loss.mean()

@@ -3,9 +3,16 @@
 import os.path as osp
 import abc
 import math
+import numpy as np
+import scipy.misc
 
 import torch
+import torchvision
+import torchvision.datasets as datasets
+import torch.nn.functional as F
+from torchvision.utils import save_image
 from torch.utils import data
+from torch.utils.data.sampler import SubsetRandomSampler
 
 from src import logger
 
@@ -28,7 +35,7 @@ class TemporalNetworkDataset(data.Dataset):
     HAS_AGGREGATE_TARGET = False
     HAS_NODE_TARGET = True
 
-    def __init__(self, config, filename, task_cfg, mode="train"):
+    def __init__(self, config, task_cfg, filename=None, mode="train"):
         r"""
             args:
                 config: dataset config
@@ -40,26 +47,34 @@ class TemporalNetworkDataset(data.Dataset):
         self.inputs = None
         self.targets = None
         self.masks = None
+        self.config = config.DATA
+        self.mode = mode
         # self.oracle = None # Oracle information
 
-        logger.info(f"Loading {filename}")
-        self.config = config.DATA
-        self.datapath = osp.join(self.config.DATAPATH, filename)
-        split_path = self.datapath.split(".")
-        if split_path[-1] == "pth":
-            dataset_dict = torch.load(self.datapath)
-            if "key" not in dataset_dict or dataset_dict["key"] != task_cfg.KEY:
-                raise Exception(f"Unexpected dataset task {dataset_dict['key']}. Expected configured task {task_cfg.KEY}")
-            self._initialize_dataset(dataset_dict, task_cfg)
-        else:
-            raise Exception(f"Unknown dataset extension {split_path[-1]}")
+        if len(filename) > 0:
+            logger.info(f"Loading {filename}")
+            self.datapath = osp.join(self.config.DATAPATH, filename)
+            split_path = self.datapath.split(".")
+            if split_path[-1] == "pth":
+                dataset_dict = torch.load(self.datapath)
+                if "key" not in dataset_dict or dataset_dict["key"] != task_cfg.KEY:
+                    raise Exception(f"Unexpected dataset task {dataset_dict['key']}. Expected configured task {task_cfg.KEY}")
+                self._initialize_dataset(dataset_dict, task_cfg)
+            else:
+                raise Exception(f"Unknown dataset extension {split_path[-1]}")
 
-        if config.DATA.OVERFIT_TEST:
-            # Assuming batch dim 0
-            self.inputs = self.inputs[:10]
-            self.targets = self.targets[:10]
-            self.masks = self.masks[:10]
-            # self.oracle = self.oracle[:10] if self.config.USE_ORACLE else None
+            if config.DATA.OVERFIT_TEST:
+                # Assuming batch dim 0
+                self.inputs = self.inputs[:10]
+                self.targets = self.targets[:10]
+                self.masks = self.masks[:10]
+                # self.oracle = self.oracle[:10] if self.config.USE_ORACLE else None
+        else:
+            self.init_without_files(task_cfg)
+
+    @abc.abstractmethod
+    def init_without_files(self, task_cfg):
+        pass
 
     @abc.abstractmethod
     def _initialize_dataset(self, dataset_dict, task_cfg):
@@ -78,9 +93,9 @@ class TemporalNetworkDataset(data.Dataset):
     def __getitem__(self, index):
         r"""
             Return: Tuple of
-                input: B x T x H_in or B x T x N x H_in
-                target: B x T x H_out or B x T x N x H_out
-                mask: B x T or B x T x N
+                input: T x H_in or T x N x H_in
+                target: T x H_out or T x N x H_out
+                mask: T or T x N
         """
         return (
             self.inputs[index],
@@ -154,7 +169,10 @@ class DensityClassificationDataset(TemporalNetworkDataset):
         # Calculate T (depends on diameter of network..)
         initial_states = dataset_dict["data"][:, :task_cfg.NUM_NODES]
         B, N = initial_states.size()
-        T = int(3 * math.log(N) / math.log(2)) # For N from 149 to 999, this is around 20 - 30 timesteps.
+        if task_cfg.NUM_STEPS < 0:
+            T = int(3 * math.log(N) / math.log(2)) # For N from 149 to 999, this is around 20 - 30 timesteps.
+        else:
+            T = task_cfg.NUM_STEPS
         # We require our graphs to be fully connected, for simplicity, so the true diameter is shorter (6-10).
         # So this should be ample computation time?
         self.inputs = torch.zeros((B, T, N, 1))
@@ -163,10 +181,66 @@ class DensityClassificationDataset(TemporalNetworkDataset):
         self.masks = torch.zeros_like(self.targets, dtype=torch.bool)
         self.masks[:, T-1] = 1
 
+class SequentialMNISTDataset(TemporalNetworkDataset):
+    r"""
+        Pixel-wise Sequential MNIST.
+        Wraps over RIMs sequential MNIST dataloaders.
+        # TODO support val
+    """
+    HAS_AGGREGATE_INPUT = True
+    HAS_AGGREGATE_TARGET = True
+
+    def __init__(self, config, task_cfg, filename=None, mode="train"):
+        assert not config.DATA.OVERFIT_TEST, "Unsupported"
+        super().__init__(config, task_cfg, filename=filename, mode=mode)
+
+    def init_without_files(self, task_cfg):
+        self.dataset = self.get_mnist_dataset()
+        if task_cfg.NUM_STEPS < 0:
+            T = 784 # Hard-coded, revisit with below upsampling
+        else:
+            T = task_cfg.NUM_STEPS
+        self.masks = torch.zeros((len(self.dataset), T), dtype=torch.bool)
+        self.masks[:, -1] = 1
+
+    def __getitem__(self, index):
+        img, label = self.dataset[index] # 1 x w x h
+        # For efficient upsampling, this processing will happen in the module itself
+        # # TODO Upsample to 14 x 14?
+        # img = F.interpolate(img.unsqueeze(1), ())
+        # seq_img = torch.flatten(img).unsqueeze(-1) # 784 x 1 -- that's way too long dude
+        # seq_label = torch.zeros_like(seq_img)
+        # seq_label[-1] = label
+        return (
+            img,
+            label,
+            self.masks[index]
+        )
+
+    def __len__(self):
+        return len(self.dataset)
+
+
+    def _initialize_dataset(self, dataset_dict, task_cfg):
+        pass
+
+    def get_mnist_dataset(self):
+        '''
+        Adapted from https://raw.githubusercontent.com/anirudh9119/RIMs/master/event_based/mnist_seq_data_classify.py
+        Returns:
+            x: (784,50000) int32.
+            y: (784,50000) int32.
+        '''
+        path = self.config.DATAPATH
+        # We'll use test as val -- we're not trying to break any benchmarks here, nor are we worreid about overfitting to val
+        mnist_dataset = datasets.MNIST(root=path, train=(self.mode == "train"), download=True, transform=torchvision.transforms.Compose([torchvision.transforms.ToTensor()]))
+        return mnist_dataset
+
 class DatasetRegistry:
     _registry = {
         "sinusoid": SinusoidDataset,
-        "density_classification": DensityClassificationDataset
+        "density_classification": DensityClassificationDataset,
+        "seq_mnist": SequentialMNISTDataset
     }
 
     @classmethod
