@@ -6,11 +6,9 @@ module_path = os.path.abspath(os.path.join('..'))
 if module_path not in sys.path:
     sys.path.append(module_path)
 
-import torch
-
 from src import logger
-from src.run import prepare_config
 from src.runner import Runner
+from run import prepare_config
 
 def init(variant, ckpt, base="", prefix=""):
     # Initialize model
@@ -27,18 +25,23 @@ def init(variant, ckpt, base="", prefix=""):
                 "SYSTEM.NUM_GPUS", 1,
             ], suffix=prefix
         )
+    # Update relative path
+    config.defrost()
+    config.MODEL.GRAPH_FILE = f"../{config.MODEL.GRAPH_FILE}"
+    config.freeze()
     runner = Runner(config)
-    runner.load_device()
+    return runner, ckpt_path
+    # runner.load_device()
 
-    ckpt_dict = runner.load_checkpoint(ckpt_path, map_location="cpu")
+    # ckpt_dict = runner.load_checkpoint(ckpt_path, map_location="cpu")
 
-    # TODO Call model setup if needed (device loading)
+    # # TODO Call model setup if needed (device loading)
 
-    runner.model.load_state_dict(ckpt_dict)
-    runner.model.eval()
-    torch.set_grad_enabled(False)
-    # TODO get data, load it to device, and  as well
-    # data = data.to(runner.device)
+    # runner.model.load_state_dict(ckpt_dict)
+    # runner.model.eval()
+    # torch.set_grad_enabled(False)
+    # # TODO get data, load it to device, and  as well
+    # # data = data.to(runner.device)
 
-    logger.info("Done.")
-    return runner
+    # logger.info("Done.")
+    # return runner

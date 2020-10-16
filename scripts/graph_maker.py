@@ -14,28 +14,32 @@ if module_path not in sys.path:
 
 import networkx as nx
 
-output_dir = "../configs/graphs/"
+output_dir = "../configs/graphs/sinusoid/"
+os.makedirs(output_dir, exist_ok=True)
 
 graph_generator = "erdos-renyi"
 graph_seed = 0
-n = 8
-p = 0.1
+params = []
+n = 10
+p = 0.6
 
 # https://networkx.github.io/documentation/stable/reference/generators.html
 GENERATORS = {
     "erdos-renyi": nx.erdos_renyi_graph
 }
 
-def make_and_save_graph(generator=graph_generator, seed=graph_seed):
-    target_path = osp.join(output_dir, generator, f"{seed}.edgelist")
+def make_and_save_graph(params: dict, generator=graph_generator, seed=graph_seed):
+    param_strs = [f"{k}-{v}" for k, v in params]
+    param_str = str.join(param_strs, "_")
+    target_path = osp.join(output_dir, generator, f"{param_str}.edgelist")
     gen_class = GENERATORS[generator]
 
-    G = gen_class(n, p, seed=seed)
+    G = gen_class(params.get("n"), params.get("p"), seed=params.get("seed"))
     # TODO disallow >1 CC
 
     nx.write_edgelist(G, target_path)
 
-make_and_save_graph()
+# make_and_save_graph()
 
 # TODO
 # make and save graph and a corresponding config file (from a base config)

@@ -9,3 +9,4 @@ MODEL:
   GRAPH_FILE: "configs/graphs/n10_p0.6_test.edgelist"
 TRAIN:
   BATCH_SIZE: 32
+  CHECKPOINT_INTERVAL: 10

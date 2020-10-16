@@ -26,10 +26,28 @@ from torch.utils import data
 # from src import logger
 # logger.mute()
 
-from src.run import prepare_config
-from src.runner import Runner
-
 from analyze_utils import init
 
-# TODO
-ckpt_path = "/nethome/jye72/share/noised-rnn-networks/sinusoid"
+variant = "seq_mnist"
+ckpt = 14
+
+variant = "sinusoid"
+ckpt
+
+runner, ckpt_path = init(variant, ckpt)
+#%%
+
+inputs, outputs, targets, masks = runner.eval(ckpt_path)
+
+
+
+#%%
+# MNIST
+_, predicted = torch.max(outputs, 2) # B x T
+masked_predictions = torch.masked_select(predicted, masks) # B x 1
+print(masked_predictions.float().mean())
+def show_trial(trial=0):
+    plt.imshow(inputs[trial, 0])
+    plt.title(f"Pred: {masked_predictions[trial]} Label: {targets[trial]}")
+
+show_trial(5)

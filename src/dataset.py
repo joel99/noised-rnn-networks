@@ -9,6 +9,7 @@ import scipy.misc
 import torch
 import torchvision
 import torchvision.datasets as datasets
+import torchvision.transforms as transforms
 import torch.nn.functional as F
 from torchvision.utils import save_image
 from torch.utils import data
@@ -228,7 +229,12 @@ class SequentialMNISTDataset(TemporalNetworkDataset):
         '''
         path = self.config.DATAPATH
         # We'll use test as val -- we're not trying to break any benchmarks here, nor are we worreid about overfitting to val
-        mnist_dataset = datasets.MNIST(root=path, train=(self.mode == "train"), download=True, transform=torchvision.transforms.Compose([torchvision.transforms.ToTensor()]))
+        mnist_dataset = datasets.MNIST(
+            root=path,
+            train=(self.mode == "train"),
+            download=True,
+            transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]) # https://gist.github.com/kdubovikov/eb2a4c3ecadd5295f68c126542e59f0a
+        )
         return mnist_dataset
 
 class DatasetRegistry:

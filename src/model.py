@@ -199,7 +199,7 @@ class SeqSeqModel(nn.Module):
 # Evaluation functions (e.g. accuracy)
 
 def eval_sinusoid(outputs, targets, masks):
-    return torch.masked_select(F.mse_loss(outputs, targets), masks)
+    return torch.masked_select(F.mse_loss(outputs, targets), masks).mean()
 
 def eval_dc(outputs, targets, masks):
     r"""

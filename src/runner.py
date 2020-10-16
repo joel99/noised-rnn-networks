@@ -128,6 +128,8 @@ class Runner:
         r"""
             Load primary device.
         """
+        if self.device is not None:
+            return
         if not torch.cuda.is_available():
             self.device = torch.device("cpu")
         else:
@@ -189,16 +191,7 @@ class Runner:
         )
 
         if self.optimizer is not None and train_cfg.LR.SCHEDULE:
-            # steps_per_update = len(training_set) / self.config.DATA.BATCH_SIZE
-            # warmup_updates = 1
             self.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', factor=0.5, patience=5)
-            # self.lr_scheduler = optim.lr_scheduler.LambdaLR(
-            #     self.optimizer,
-            #     lambda x: linear_decay(x, train_cfg.NUM_UPDATES)
-            #     # warmup_steps=steps_per_update * warmup_updates,
-            #     # t_total=steps_per_update * train_cfg.NUM_UPDATES,
-            #     # cycles=train_cfg.LR.RESTARTS
-            # )
 
         pth_time = 0
         count_updates = 0
@@ -273,8 +266,8 @@ class Runner:
                             loss, outputs = self.model(x, targets, masks)
                             batch_size = x.size(0)
                             total_count += batch_size
-                            metric = EvalRegistry.eval_task(task_cfg.KEY, outputs, targets, masks)
-                            total_metric += batch_size * metric
+                            metric = EvalRegistry.eval_task(task_cfg.KEY, outputs, targets, masks) # this 3200, and total metric is 6400
+                            total_metric += batch_size * metric.item()
                             eval_losses += loss.mean().item() * batch_size
                         val_loss = eval_losses / total_count
                         total_metric /= total_count
@@ -293,6 +286,7 @@ class Runner:
 
                         if self._do_log(update):
                             logger.queue_stat("val loss", val_loss)
+                            logger.queue_stat("eval metric", total_metric)
 
                         if self.best_val["value"] > val_loss:
                             self.best_val["value"] = val_loss
@@ -319,15 +313,20 @@ class Runner:
 
     def eval(
         self,
-        checkpoint_path: str
+        checkpoint_path: str,
+        save_path: str = None,
     ) -> None:
-        r"""Evaluates a single checkpoint (in interpretable metrics e.g. accuracy). Logger will print agnostic messages, interpret per task.
+        r"""Evaluates and runs predictiosn for a single checkpoint.
+        Logger will print agnostic messages, interpret per task.
         Args:
             checkpoint_path: path of checkpoint
+            save_path: If provided, will save outputs at this location.
 
         Returns:
-            None
+            Model outputs for the dataset. (Thankfully, we're working with small tasks)
         """
+
+        # ! TODO add activations (for analysis and debugging)
         logger.info(f"Starting evaluation")
 
         self.setup_model()
@@ -353,11 +352,19 @@ class Runner:
                 eval_losses = 0
                 total_metric = 0
                 total_count = 0
+                all_inputs = []
+                all_outputs = []
+                all_targets = []
+                all_masks = []
                 for x, targets, masks in validation_generator:
                     x = x.to(self.device)
                     targets = targets.to(self.device)
                     masks = masks.to(self.device)
                     loss, outputs = self.model(x, targets, masks)
+                    all_inputs.append(x)
+                    all_outputs.append(outputs) # B x T (x N) x H
+                    all_targets.append(targets) # B x T (x N) x H
+                    all_masks.append(masks)
                     batch_size = x.size(0)
                     total_count += batch_size
                     metric = EvalRegistry.eval_task(task_cfg.KEY, outputs, targets, masks)
@@ -365,6 +372,20 @@ class Runner:
                     eval_losses += loss.mean().item() * batch_size
                 eval_losses /= total_count
                 total_metric /= total_count
+
+                # Wrap up and package for return
+                all_inputs = torch.cat(all_inputs, dim=0)
+                all_outputs = torch.cat(all_outputs, dim=0)
+                all_targets = torch.cat(all_targets, dim=0)
+                all_masks = torch.cat(all_masks, dim=0)
+
+                if save_path is not None:
+                    torch.save({
+                        "inputs": all_inputs,
+                        "outputs": all_outputs,
+                        "targets": all_targets,
+                        "masks": all_masks
+                    }, save_path)
 
                 writer.add_scalar(
                     "eval_loss",
@@ -380,3 +401,5 @@ class Runner:
 
                 logger.info(f"Eval loss: {eval_losses}")
                 logger.info(f"Eval metric: {total_metric}")
+
+                return all_inputs, all_outputs, all_targets, all_masks

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Author: Joel Ye
 
-from typing import List, Union
+from typing import List, Union, Tuple
 import os.path as osp
 import shutil
 import random
@@ -10,6 +10,7 @@ import argparse
 import numpy as np
 import torch
 
+from yacs.config import CfgNode as CN
 from src.config.default import get_config
 from src.runner import Runner
 from src import logger
@@ -67,7 +68,7 @@ def check_exists(path, preserve=DO_PRESERVE_RUNS):
         return True
     return False
 
-def prepare_config(exp_config: Union[List[str], str], run_type: str, ckpt_path="", opts=None, suffix=None) -> None:
+def prepare_config(exp_config: Union[List[str], str], run_type: str, ckpt_path="", opts=None, suffix=None) -> Tuple[CN, str]:
     r"""Prepare config node / do some preprocessing
 
     Args:
