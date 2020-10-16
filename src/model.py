@@ -14,7 +14,7 @@ from torch.nn import Parameter as Param
 from torch_sparse import SparseTensor, matmul
 from torch_geometric.nn.conv import MessagePassing
 
-from src import logger, TaskRegistry
+from src import TaskRegistry
 
 class GraphRNN(MessagePassing):
     r"""

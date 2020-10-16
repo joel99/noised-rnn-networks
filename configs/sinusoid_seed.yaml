@@ -1,4 +1,4 @@
-EXPERIMENT: ""
+EXPERIMENT: "sin_seed"
 CHECKPOINT_DIR: "/nethome/jye72/share/noised-rnn-networks/"
 DATA:
   DATAPATH: "/nethome/jye72/projects/noised-rnn-networks/data"
@@ -7,7 +7,8 @@ DATA:
 TASK:
   KEY: "sinusoid"
 MODEL:
-  GRAPH_FILE: "configs/graphs/n10_p0.6_test.edgelist"
+  GRAPH_FILE: "configs/graphs/sin_seed_test/"
 TRAIN:
   BATCH_SIZE: 100
   CHECKPOINT_INTERVAL: 10
+  PATIENCE: 100

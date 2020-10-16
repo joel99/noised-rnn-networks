@@ -1,3 +1,4 @@
+EXPERIMENT: ""
 # Not quite working well. We should sweep in the meantime to try to get this working.
 CHECKPOINT_DIR: "/nethome/jye72/share/noised-rnn-networks/"
 DATA:
@@ -16,3 +17,6 @@ TRAIN:
   LR:
     INIT: 1e-4
   WEIGHT_DECAY: 0.001
+  CHECKPOINT_INTERVAL: 10
+  LOG_INTERVAL: 10
+  VAL_INTERVAL: 10

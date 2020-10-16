@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Author: Joel Ye
 
-from src.logger_wrapper import logger
+from src.logger_wrapper import make_logger
 from src.tb_wrapper import TensorboardWriter
 
 class TaskRegistry:

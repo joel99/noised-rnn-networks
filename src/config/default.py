@@ -15,7 +15,8 @@ _C = CN()
 _C.SEED = 100
 
 # Name of experiment
-_C.VARIANT = "experiment"
+_C.EXPERIMENT = "test" # cluster of runs
+_C.VARIANT = "variant"
 _C.USE_TENSORBOARD = True
 _C.TENSORBOARD_DIR = "tb/"
 _C.CHECKPOINT_DIR = "ckpts/"

@@ -55,34 +55,3 @@ def show_trial(i=0, node=0):
     plt.title(f"Sinusoid Eval Node {node}, Trial {i}")
     plt.legend(loc=(0.7, 0.1))
 show_trial(5, 6)
-
-# Checks out. We're good with this task
-
-#%%
-# DC
-
-# We are most definitely not learning. Why? Signal is sparse.
-def show_trial(i=0, node=0):
-    print(masks[i].size())
-    print(inputs[i].size())
-    time_range = torch.arange(inputs.size(1)) # 23, 23 10 1
-    node_in = inputs[i, :, node]
-    node_out = outputs[i, :, node]
-    node_target = targets[i, :, node]
-    plt.plot(time_range, node_in, label="input")
-    plt.plot(time_range, node_out, label="prediction")
-    # plt.plot(time_range, node_target, label="truth")
-    plt.title(f"DC Node {node} Input {node_in[0].item()}| Trial {i} Target {node_target[0].item()}")
-    plt.legend(loc=(0.7, 0.1))
-show_trial(5, 3)
-
-#%%
-# MNIST
-_, predicted = torch.max(outputs, 2) # B x T
-masked_predictions = torch.masked_select(predicted, masks) # B x 1
-print(masked_predictions.float().mean())
-def show_trial(trial=0):
-    plt.imshow(inputs[trial, 0])
-    plt.title(f"Pred: {masked_predictions[trial]} Label: {targets[trial]}")
-
-show_trial(5)

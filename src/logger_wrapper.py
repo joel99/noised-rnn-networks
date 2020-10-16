@@ -41,12 +41,13 @@ class Logger(logging.Logger):
         return queue
 
     def mute(self):
-        logger.setLevel(logging.ERROR)
+        self.setLevel(logging.ERROR)
 
 
-logger = Logger(
-    name="NoisedRNNNetworks", level=logging.INFO, format="%(asctime)-15s %(message)s"
-)
+def make_logger():
+    return Logger(
+        name="NoisedRNNNetworks", level=logging.INFO, format="%(asctime)-15s %(message)s"
+    )
 
 
-__all__ = ["logger"]
+__all__ = ["make_logger"]

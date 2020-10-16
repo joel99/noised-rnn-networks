@@ -15,8 +15,6 @@ from torchvision.utils import save_image
 from torch.utils import data
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from src import logger
-
 class TemporalNetworkDataset(data.Dataset):
     r"""
         A temporal network dataset is a modeling problem for N nodes over time.
@@ -53,7 +51,6 @@ class TemporalNetworkDataset(data.Dataset):
         # self.oracle = None # Oracle information
 
         if len(filename) > 0:
-            logger.info(f"Loading {filename}")
             self.datapath = osp.join(self.config.DATAPATH, filename)
             split_path = self.datapath.split(".")
             if split_path[-1] == "pth":
@@ -180,7 +177,7 @@ class DensityClassificationDataset(TemporalNetworkDataset):
         self.inputs[:, 0] = initial_states.view(B, N, 1)
         self.targets = (torch.sum(initial_states, dim=1) > (N / 2)).view(B, 1, 1, 1).expand(B, T, N, 1).float()
         self.masks = torch.zeros_like(self.targets, dtype=torch.bool)
-        self.masks[:, T-1] = 1
+        self.masks[:, T-1] = 1 # Only evaluate in final timestep
 
 class SequentialMNISTDataset(TemporalNetworkDataset):
     r"""

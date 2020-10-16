@@ -16,7 +16,7 @@ from torch.utils import data as torchData
 from src import (
     get_model_class,
     TensorboardWriter,
-    logger
+    make_logger
 )
 
 from src.dataset import DatasetRegistry
@@ -43,7 +43,8 @@ class Runner:
         if not osp.exists(config.LOG_DIR):
             os.makedirs(config.LOG_DIR, exist_ok=True)
         logfile_path = osp.join(config.LOG_DIR, f"{config.VARIANT}.log")
-        logger.add_filehandler(logfile_path)
+        self.logger = make_logger()
+        self.logger.add_filehandler(logfile_path)
 
         self.best_val = {
             "value": 100,
@@ -134,7 +135,7 @@ class Runner:
             self.device = torch.device("cpu")
         else:
             self.num_gpus = min(self.config.SYSTEM.NUM_GPUS, torch.cuda.device_count())
-            logger.info(f"Using {self.num_gpus} GPUs")
+            self.logger.info(f"Using {self.num_gpus} GPUs")
             gpu_id = self.config.SYSTEM.TORCH_GPU_ID
             if self.config.SYSTEM.GPU_AUTO_ASSIGN:
                 gpu_id = get_lightest_gpus(1)[0]
@@ -145,7 +146,7 @@ class Runner:
             )
             self.device_gpu = gpu_id
 
-        logger.info(f"Using {self.device}")
+        self.logger.info(f"Using {self.device}")
 
     def train(self, checkpoint_path=None) -> None:
         r"""Main method for training model.
@@ -180,7 +181,7 @@ class Runner:
             eps=train_cfg.EPS,
         )
 
-        logger.info(
+        self.logger.info(
             "number of trainable parameters: {}".format(
                 sum(
                     param.numel()
@@ -250,7 +251,7 @@ class Runner:
                 # Log stats
                 if self._do_log(update):
                     # * We're only logging the loss of the last train step
-                    logger.queue_stat("loss", loss.item())
+                    self.logger.queue_stat("loss", loss.item())
 
                 # Computing val on different interval than log to do early stopping
                 if train_cfg.DO_VAL and update % train_cfg.VAL_INTERVAL == 0:
@@ -285,14 +286,14 @@ class Runner:
                         )
 
                         if self._do_log(update):
-                            logger.queue_stat("val loss", val_loss)
-                            logger.queue_stat("eval metric", total_metric)
+                            self.logger.queue_stat("val loss", val_loss)
+                            self.logger.queue_stat("eval metric", total_metric)
 
                         if self.best_val["value"] > val_loss:
                             self.best_val["value"] = val_loss
                             self.best_val["update"] = update
                         elif update - self.best_val["update"] > train_cfg.PATIENCE:
-                            logger.info(f"Val loss has not improved for {train_cfg.PATIENCE} updates. Stopping...")
+                            self.logger.info(f"Val loss has not improved for {train_cfg.PATIENCE} updates. Stopping...")
                             do_stop = True
 
                     if self.optimizer is not None and train_cfg.LR.SCHEDULE:
@@ -300,9 +301,9 @@ class Runner:
                         writer.add_scalar("lr", self.optimizer.param_groups[0]['lr'])
 
                 if self._do_log(update):
-                    stat_str = "\t".join([f"{stat[0]}: {stat[1]:.3f}" for stat in logger.empty_queue()])
-                    logger.info("update: {}\t{}".format(update, stat_str))
-                    logger.info(
+                    stat_str = "\t".join([f"{stat[0]}: {stat[1]:.3f}" for stat in self.logger.empty_queue()])
+                    self.logger.info("update: {}\t{}".format(update, stat_str))
+                    self.logger.info(
                         "update: {}\tpth-time: {:.3f}s\t".format(
                             update, pth_time
                         )
@@ -317,7 +318,7 @@ class Runner:
         save_path: str = None,
     ) -> None:
         r"""Evaluates and runs predictiosn for a single checkpoint.
-        Logger will print agnostic messages, interpret per task.
+        self.logger will print agnostic messages, interpret per task.
         Args:
             checkpoint_path: path of checkpoint
             save_path: If provided, will save outputs at this location.
@@ -327,7 +328,7 @@ class Runner:
         """
 
         # ! TODO add activations (for analysis and debugging)
-        logger.info(f"Starting evaluation")
+        self.logger.info(f"Starting evaluation")
 
         self.setup_model()
 
@@ -399,7 +400,7 @@ class Runner:
                     updates,
                 )
 
-                logger.info(f"Eval loss: {eval_losses}")
-                logger.info(f"Eval metric: {total_metric}")
+                self.logger.info(f"Eval loss: {eval_losses}")
+                self.logger.info(f"Eval metric: {total_metric}")
 
                 return all_inputs, all_outputs, all_targets, all_masks
