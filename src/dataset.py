@@ -197,7 +197,7 @@ class SequentialMNISTDataset(TemporalNetworkDataset):
     def init_without_files(self, task_cfg):
         self.dataset = self.get_mnist_dataset()
         if task_cfg.NUM_STEPS < 0:
-            T = 784 # Hard-coded, revisit with below upsampling
+            T = 49 # Hard-coded, revisit with below upsampling
         else:
             T = task_cfg.NUM_STEPS
         self.masks = torch.zeros((len(self.dataset), T), dtype=torch.bool)
@@ -205,12 +205,7 @@ class SequentialMNISTDataset(TemporalNetworkDataset):
 
     def __getitem__(self, index):
         img, label = self.dataset[index] # 1 x w x h
-        # For efficient upsampling, this processing will happen in the module itself
-        # # TODO Upsample to 14 x 14?
-        # img = F.interpolate(img.unsqueeze(1), ())
-        # seq_img = torch.flatten(img).unsqueeze(-1) # 784 x 1 -- that's way too long dude
-        # seq_label = torch.zeros_like(seq_img)
-        # seq_label[-1] = label
+        # For batching efficiency, preprocessing will happen in the model itself
         return (
             img,
             label,

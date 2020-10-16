@@ -20,6 +20,7 @@ from src import (
 )
 
 from src.dataset import DatasetRegistry
+from src.model import EvalRegistry
 from src.utils import linear_decay, get_lightest_gpus
 
 """
@@ -35,6 +36,7 @@ class Runner:
         self.aux_tasks = []
         self.aux_task_names = []
         self.optimizer = None
+        self.lr_scheduler = None
         self.device = None
         self.device_gpu = None
         self.num_gpus = 0
@@ -87,6 +89,7 @@ class Runner:
         checkpoint = {
             "state_dict": self.model.state_dict(),
             "optim_state": None if self.optimizer is None else self.optimizer.state_dict(),
+            "lr_scheduler": None if self.lr_scheduler is None else self.lr_scheduler.state_dict(),
             "config": self.config,
             "best_val": self.best_val,
         }
@@ -100,6 +103,7 @@ class Runner:
 
     def load_checkpoint(self, checkpoint_path: str, *args, **kwargs) -> Dict:
         r"""Load checkpoint of specified path as a dict.
+        Assumes model, devices, and other modules are loaded.
 
         Args:
             checkpoint_path: path of target checkpoint
@@ -107,9 +111,18 @@ class Runner:
             **kwargs: additional keyword args
 
         Returns:
-            dict containing checkpoint info
+            dict containing miscellaneous checkpoint info
         """
-        return torch.load(checkpoint_path, *args, **kwargs)
+
+        ckpt_dict = torch.load(checkpoint_path, *args, **kwargs)
+        self.model.load_state_dict(ckpt_dict["state_dict"])
+        if "optim_state" in ckpt_dict and self.optimizer is not None:
+            self.optimizer.load_state_dict(ckpt_dict["optim_state"])
+        if "lr_scheduler" in ckpt_dict and self.lr_scheduler is not None:
+            self.lr_scheduler.load_state_dict(ckpt_dict["lr_scheduler"])
+        if "best_val" in ckpt_dict:
+            self.best_val = ckpt_dict["best_val"]
+        return ckpt_dict["extra_state"]
 
     def load_device(self):
         r"""
@@ -132,7 +145,6 @@ class Runner:
 
         logger.info(f"Using {self.device}")
 
-
     def train(self, checkpoint_path=None) -> None:
         r"""Main method for training model.
 
@@ -154,7 +166,6 @@ class Runner:
         )
 
         if train_cfg.DO_VAL:
-            # * We assume val is small enough that we don't need a generator
             validation_set = dataset_cls(self.config, task_cfg, filename=self.config.DATA.VAL_FILENAME, mode="val")
             validation_generator = torchData.DataLoader(validation_set,
                 batch_size=train_cfg.BATCH_SIZE, shuffle=False
@@ -177,31 +188,27 @@ class Runner:
             )
         )
 
-        pth_time = 0
-        count_updates = 0
-        count_checkpoints = 0
-        if checkpoint_path is not None:
-            ckpt_dict = self.load_checkpoint(checkpoint_path, map_location="cpu")
-            self.model.load_state_dict(ckpt_dict["state_dict"])
-            if "optim_state" in ckpt_dict:
-                self.optimizer.load_state_dict(ckpt_dict["optim_state"])
-            if "best_val" in ckpt_dict:
-                self.best_val = ckpt_dict["best_val"]
-            if "extra_state" in ckpt_dict:
-                count_updates = ckpt_dict["extra_state"]["update"]
-                count_checkpoints = ckpt_dict["extra_state"]["checkpoint"]
-                pth_time = ckpt_dict["extra_state"]["pth_time"]
-
         if self.optimizer is not None and train_cfg.LR.SCHEDULE:
             # steps_per_update = len(training_set) / self.config.DATA.BATCH_SIZE
             # warmup_updates = 1
-            lr_scheduler = optim.lr_scheduler.LambdaLR(
-                self.optimizer,
-                lambda x: linear_decay(x, train_cfg.NUM_UPDATES)
-                # warmup_steps=steps_per_update * warmup_updates,
-                # t_total=steps_per_update * train_cfg.NUM_UPDATES,
-                # cycles=train_cfg.LR.RESTARTS
-            )
+            self.lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, 'min', factor=0.5, patience=5)
+            # self.lr_scheduler = optim.lr_scheduler.LambdaLR(
+            #     self.optimizer,
+            #     lambda x: linear_decay(x, train_cfg.NUM_UPDATES)
+            #     # warmup_steps=steps_per_update * warmup_updates,
+            #     # t_total=steps_per_update * train_cfg.NUM_UPDATES,
+            #     # cycles=train_cfg.LR.RESTARTS
+            # )
+
+        pth_time = 0
+        count_updates = 0
+        count_checkpoints = 0
+
+        if checkpoint_path is not None:
+            extra_state = self.load_checkpoint(checkpoint_path, map_location="cpu")
+            count_updates = extra_state["update"]
+            count_checkpoints = extra_state["checkpoint"]
+            pth_time = extra_state["pth_time"]
 
         start_updates = count_updates
         do_stop = False
@@ -225,7 +232,7 @@ class Runner:
                     x = x.to(self.device)
                     targets = targets.to(self.device)
                     masks = masks.to(self.device)
-                    loss = self.model(x, targets, masks)
+                    loss, _ = self.model(x, targets, masks)
                     loss = loss.mean()
 
                     if self.optimizer is not None:
@@ -240,10 +247,6 @@ class Runner:
                         self.optimizer.step()
 
                 pth_time += time.time() - t_start
-
-                if self.optimizer is not None and train_cfg.LR.SCHEDULE:
-                    lr_scheduler.step()
-                    writer.add_scalar("lr", lr_scheduler.get_last_lr()[0])
 
                 writer.add_scalar(
                     "loss", # train lossget_dataset
@@ -260,14 +263,21 @@ class Runner:
                 if train_cfg.DO_VAL and update % train_cfg.VAL_INTERVAL == 0:
                     self.model.eval()
                     with torch.no_grad():
-                        val_losses = []
+                        eval_losses = 0
+                        total_metric = 0
+                        total_count = 0
                         for x, targets, masks in validation_generator:
                             x = x.to(self.device)
                             targets = targets.to(self.device)
                             masks = masks.to(self.device)
-                            loss = self.model(x, targets, masks)
-                            val_losses.append(loss.mean())
-                        val_loss = sum(val_losses) / len(val_losses) # Won't play well with uneven batches but that's low-priority
+                            loss, outputs = self.model(x, targets, masks)
+                            batch_size = x.size(0)
+                            total_count += batch_size
+                            metric = EvalRegistry.eval_task(task_cfg.KEY, outputs, targets, masks)
+                            total_metric += batch_size * metric
+                            eval_losses += loss.mean().item() * batch_size
+                        val_loss = eval_losses / total_count
+                        total_metric /= total_count
 
                         writer.add_scalar(
                             "val_loss",
@@ -275,8 +285,14 @@ class Runner:
                             update,
                         )
 
+                        writer.add_scalar(
+                            "eval_metric", # e.g. accuracy
+                            total_metric,
+                            update,
+                        )
+
                         if self._do_log(update):
-                            logger.queue_stat("val loss", val_loss.item())
+                            logger.queue_stat("val loss", val_loss)
 
                         if self.best_val["value"] > val_loss:
                             self.best_val["value"] = val_loss
@@ -284,6 +300,10 @@ class Runner:
                         elif update - self.best_val["update"] > train_cfg.PATIENCE:
                             logger.info(f"Val loss has not improved for {train_cfg.PATIENCE} updates. Stopping...")
                             do_stop = True
+
+                    if self.optimizer is not None and train_cfg.LR.SCHEDULE:
+                        self.lr_scheduler.step(val_loss)
+                        writer.add_scalar("lr", self.optimizer.param_groups[0]['lr'])
 
                 if self._do_log(update):
                     stat_str = "\t".join([f"{stat[0]}: {stat[1]:.3f}" for stat in logger.empty_queue()])
@@ -297,12 +317,11 @@ class Runner:
                 if do_stop:
                     return
 
-
     def eval(
         self,
         checkpoint_path: str
     ) -> None:
-        r"""Evaluates a single checkpoint.
+        r"""Evaluates a single checkpoint (in interpretable metrics e.g. accuracy). Logger will print agnostic messages, interpret per task.
         Args:
             checkpoint_path: path of checkpoint
 
@@ -311,6 +330,53 @@ class Runner:
         """
         logger.info(f"Starting evaluation")
 
-        self.load_device()
+        self.setup_model()
 
-        # TODO
+        train_cfg = self.config.TRAIN
+        task_cfg = self.config.TASK
+
+        dataset_cls = DatasetRegistry.get_dataset(task_cfg.KEY)
+
+        validation_set = dataset_cls(self.config, task_cfg, filename=self.config.DATA.VAL_FILENAME, mode="val")
+        validation_generator = torchData.DataLoader(validation_set,
+            batch_size=train_cfg.BATCH_SIZE, shuffle=False
+        )
+
+        extra_state = self.load_checkpoint(checkpoint_path, map_location="cpu")
+        updates = extra_state["update"]
+
+        self.model.eval()
+        with TensorboardWriter(
+            self.config.TENSORBOARD_DIR, flush_secs=self.flush_secs
+        ) as writer:
+            with torch.no_grad():
+                eval_losses = 0
+                total_metric = 0
+                total_count = 0
+                for x, targets, masks in validation_generator:
+                    x = x.to(self.device)
+                    targets = targets.to(self.device)
+                    masks = masks.to(self.device)
+                    loss, outputs = self.model(x, targets, masks)
+                    batch_size = x.size(0)
+                    total_count += batch_size
+                    metric = EvalRegistry.eval_task(task_cfg.KEY, outputs, targets, masks)
+                    total_metric += batch_size * metric
+                    eval_losses += loss.mean().item() * batch_size
+                eval_losses /= total_count
+                total_metric /= total_count
+
+                writer.add_scalar(
+                    "eval_loss",
+                    eval_losses,
+                    updates,
+                )
+
+                writer.add_scalar(
+                    "eval_metric", # e.g. accuracy
+                    total_metric,
+                    updates,
+                )
+
+                logger.info(f"Eval loss: {eval_losses}")
+                logger.info(f"Eval metric: {total_metric}")
