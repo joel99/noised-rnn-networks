@@ -316,12 +316,15 @@ class Runner:
         self,
         checkpoint_path: str,
         save_path: str = None,
+        log_tb = False,
+        *args, **kwargs
     ) -> None:
         r"""Evaluates and runs predictiosn for a single checkpoint.
         self.logger will print agnostic messages, interpret per task.
         Args:
             checkpoint_path: path of checkpoint
             save_path: If provided, will save outputs at this location.
+            Other args (perturbations) will be forwarded to the model.
 
         Returns:
             Model outputs for the dataset. (Thankfully, we're working with small tasks)
@@ -361,7 +364,7 @@ class Runner:
                     x = x.to(self.device)
                     targets = targets.to(self.device)
                     masks = masks.to(self.device)
-                    loss, outputs = self.model(x, targets, masks)
+                    loss, outputs = self.model(x, targets, masks, *args, **kwargs)
                     all_inputs.append(x)
                     all_outputs.append(outputs) # B x T (x N) x H
                     all_targets.append(targets) # B x T (x N) x H
@@ -380,27 +383,32 @@ class Runner:
                 all_targets = torch.cat(all_targets, dim=0)
                 all_masks = torch.cat(all_masks, dim=0)
 
+                info = {
+                    "inputs": all_inputs,
+                    "outputs": all_outputs,
+                    "targets": all_targets,
+                    "masks": all_masks
+                }
                 if save_path is not None:
-                    torch.save({
-                        "inputs": all_inputs,
-                        "outputs": all_outputs,
-                        "targets": all_targets,
-                        "masks": all_masks
-                    }, save_path)
+                    torch.save(info, save_path)
 
-                writer.add_scalar(
-                    "eval_loss",
-                    eval_losses,
-                    updates,
-                )
+                if log_tb:
+                    writer.add_scalar(
+                        "eval_loss",
+                        eval_losses,
+                        updates,
+                    )
 
-                writer.add_scalar(
-                    "eval_metric", # e.g. accuracy
-                    total_metric,
-                    updates,
-                )
+                    writer.add_scalar(
+                        "eval_metric", # e.g. accuracy
+                        total_metric,
+                        updates,
+                    )
 
                 self.logger.info(f"Eval loss: {eval_losses}")
                 self.logger.info(f"Eval metric: {total_metric}")
-
-                return all_inputs, all_outputs, all_targets, all_masks
+                metrics = {
+                    "loss": eval_losses,
+                    "metric": total_metric
+                }
+                return metrics, info

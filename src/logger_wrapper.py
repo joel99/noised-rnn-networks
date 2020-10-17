@@ -32,6 +32,9 @@ class Logger(logging.Logger):
         filehandler.setFormatter(self._formatter)
         self.addHandler(filehandler)
 
+    def clear_filehandlers(self):
+        self.handlers = [h for h in self.handlers if isinstance(h, logging.StreamHandler)]
+
     def queue_stat(self, stat_name, stat):
         self.stat_queue.append((stat_name, stat))
 

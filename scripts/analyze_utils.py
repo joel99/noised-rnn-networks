@@ -24,11 +24,13 @@ def init(variant, ckpt, base="", prefix=""):
                 "SYSTEM.NUM_GPUS", 1,
             ], suffix=prefix
         )
+    # TODO This won't include the graph file update
     # Update relative path
     config.defrost()
     config.MODEL.GRAPH_FILE = f"../{config.MODEL.GRAPH_FILE}"
     config.freeze()
     runner = Runner(config)
+    runner.logger.clear_filehandlers()
     return runner, ckpt_path
     # runner.load_device()
 

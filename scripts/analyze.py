@@ -33,9 +33,10 @@ ckpt = 14
 variant = "sinusoid"
 ckpt = 14
 
-variant = "dc"
-ckpt = 1
-runner, ckpt_path = init(variant, ckpt)
+# variant = "dc"
+# ckpt = 1
+# runner, ckpt_path = init(variant, ckpt)
+
 #%%
 
 inputs, outputs, targets, masks = runner.eval(ckpt_path)

@@ -111,6 +111,8 @@ def prepare_config(exp_config: Union[List[str], str], run_type: str, ckpt_path="
         suffix = config.EXPERIMENT
     add_suffix(config, suffix)
 
+    add_suffix(config, variant_name)
+
     if osp.exists(config.MODEL.GRAPH_FILE) and not osp.isdir(config.MODEL.GRAPH_FILE):
         graph_id = osp.split(config.MODEL.GRAPH_FILE)[1][:5]
         add_suffix(config, graph_id)

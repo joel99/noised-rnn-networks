@@ -37,6 +37,7 @@ class GraphRNN(MessagePassing):
         self.hidden_size = config.HIDDEN_SIZE
         self.dropout = config.DROPOUT
         self.input_size = task_cfg.INPUT_SIZE
+        # self.norm = nn.LayerNorm(self.hidden_size)
 
         G = nx.read_edgelist(config.GRAPH_FILE, nodetype=int) # is this really 2xE
         if len(G) != task_cfg.NUM_NODES:
@@ -78,6 +79,7 @@ class GraphRNN(MessagePassing):
         if inputs is not None:
             m_and_input = torch.cat([m, inputs], dim=-1)
             m = self.mix_input(m_and_input)
+        # m = self.norm(m)
         m = F.dropout(m, p=self.dropout, training=self.training)
         if self.config.INDEPENDENT_DYNAMICS:
             rnn_states = []
@@ -163,12 +165,14 @@ class SeqSeqModel(nn.Module):
         targets_mask,
         input_mask=None,
         log_state=False,
+        perturb=None,
     ):
         r"""
             Calculate loss.
             x: B x T (x N) x H_in
             targets: B x T (x N) x H_out=1
             targets_mask: B x T (x N). 1 to keep the loss, 0 if not.
+            perturb: T x N x hidden_size -- additive noise (batch agnostic)
 
             # Not supported
             input_mask: B x T x N. Ignore input when x = 1. ! Don't think supporting B is posssible.
@@ -189,6 +193,9 @@ class SeqSeqModel(nn.Module):
                 all_states.append(state)
             output = self.readout(state) # B (x N) x H
             outputs.append(output)
+
+            if perturb is not None:
+                state = state + perturb[i].unsqueeze(0).expand_as(state)
         outputs = torch.stack(outputs, 1) # B x T (x N) x H
         loss = self.criterion(outputs, targets)
         # import pdb

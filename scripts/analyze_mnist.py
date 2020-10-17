@@ -27,54 +27,17 @@ from torch.utils import data
 
 from analyze_utils import init
 
-variant = "seq_mnist"
-ckpt = 14
+variant = "seq_mnist_2"
+ckpt = 10
 
-variant = "sinusoid"
-ckpt = 14
-
-variant = "dc"
-ckpt = 1
 runner, ckpt_path = init(variant, ckpt)
 #%%
 
-inputs, outputs, targets, masks = runner.eval(ckpt_path)
-
-
-#%%
-# Sinusoid
-def show_trial(i=0, node=0):
-    print(masks[i].size())
-    time_range = torch.arange(inputs.size(1)) # 23, 23 10 1
-    # node_in = inputs[i, :, node]
-    node_out = outputs[i, :, node]
-    node_target = targets[i, :, node]
-    plt.axvline(3, label="Trial start") # ! This depends on dataset
-    plt.plot(time_range, node_out, label="prediction")
-    plt.plot(time_range, node_target, label="truth")
-    plt.title(f"Sinusoid Eval Node {node}, Trial {i}")
-    plt.legend(loc=(0.7, 0.1))
-show_trial(5, 6)
-
-# Checks out. We're good with this task
-
-#%%
-# DC
-
-# We are most definitely not learning. Why? Signal is sparse.
-def show_trial(i=0, node=0):
-    print(masks[i].size())
-    print(inputs[i].size())
-    time_range = torch.arange(inputs.size(1)) # 23, 23 10 1
-    node_in = inputs[i, :, node]
-    node_out = outputs[i, :, node]
-    node_target = targets[i, :, node]
-    plt.plot(time_range, node_in, label="input")
-    plt.plot(time_range, node_out, label="prediction")
-    # plt.plot(time_range, node_target, label="truth")
-    plt.title(f"DC Node {node} Input {node_in[0].item()}| Trial {i} Target {node_target[0].item()}")
-    plt.legend(loc=(0.7, 0.1))
-show_trial(5, 3)
+metrics, info = runner.eval(ckpt_path)
+inputs = info["inputs"]
+outputs = info["outputs"]
+targets = info["targets"]
+masks = info["masks"]
 
 #%%
 # MNIST
@@ -85,4 +48,19 @@ def show_trial(trial=0):
     plt.imshow(inputs[trial, 0])
     plt.title(f"Pred: {masked_predictions[trial]} Label: {targets[trial]}")
 
-show_trial(5)
+show_trial(8)
+
+
+#%%
+# perturbation analysis
+_, t = masks.size()
+h = runner.config.MODEL.HIDDEN_SIZE
+n = runner.config.TASK.NUM_NODES
+strength = 1.0
+perturbation = torch.zeros(t, n, h)
+
+perturbation_step = 25 # Right in the middle.
+nodes_perturbed = [1] # A random one
+perturbation[perturbation_step, nodes_perturbed] = torch.rand(h) * strength
+
+metrics, info = runner.eval(ckpt_path, save_path=None, log_tb=False, perturb=perturbation)

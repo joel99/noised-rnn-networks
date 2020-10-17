@@ -5,6 +5,7 @@ then
     echo "Here we go"
     python -u run.py --run-type train --exp-config configs/$1.yaml
 elif [[ $# -ge 2 ]]
+# Simply add the "-s" flag in order to sweep a directory (will run sequentially)
 then
     echo ${@:3}
     python -u run.py --run-type train --exp-config configs/$1.yaml ${@:2}
