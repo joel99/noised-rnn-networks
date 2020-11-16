@@ -10,6 +10,7 @@ TASK:
   AGGREGATE_INPUT: True
   AGGREGATE_OUTPUT: True
 MODEL:
+  TYPE: GRU
   HIDDEN_SIZE: 64
   GRAPH_FILE: "configs/graphs/n10_p0.6_test.edgelist"
 TRAIN:

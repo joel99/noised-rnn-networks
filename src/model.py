@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from torch import Tensor
-from torch.nn import Parameter as Param
+from torch.nn import Parameter as Param, GRUCell
 from torch_sparse import SparseTensor, matmul
 from torch_geometric.nn.conv import MessagePassing
 
@@ -124,6 +124,18 @@ class PermutedCE(nn.Module):
     def forward(self, inputs, targets): # 3-dim input to C in last dim to C in second
         return self.criterion(inputs.permute(0, 2, 1), targets) # N x C x T -> N x T
 
+class GRUWrapper(GRUCell):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.n = 1
+
+    # Feign being a graph with 1 node
+    def forward(self, x, h):
+        # x: B x N
+        # h: B x 1 x N
+        # Out: B x 1 x N
+        return super().forward(x, h.squeeze(1)).unsqueeze(1)
+
 class SeqSeqModel(nn.Module):
     def __init__(self, config, task_cfg, device):
         super().__init__()
@@ -131,10 +143,14 @@ class SeqSeqModel(nn.Module):
         self.hidden_size = config.HIDDEN_SIZE
         self.device = device
         self.duplicate_inputs = False
-        self.graphrnn = GraphRNN(config, task_cfg, device)
-        self.init_readout()
+        if config.TYPE == "GRU":
+            self.recurrent_network = GRUWrapper(task_cfg.INPUT_SIZE, self.hidden_size)
+        else:
+            self.recurrent_network = GraphRNN(config, task_cfg, device)
 
-    def init_readout(self):
+        self.init_readout(config)
+
+    def init_readout(self, config):
         if self.key == TaskRegistry.SINUSOID:
             self.readout = nn.Linear(self.hidden_size, 1)
             self.criterion = nn.MSELoss(reduction='none')
@@ -142,7 +158,10 @@ class SeqSeqModel(nn.Module):
             self.readout = nn.Linear(self.hidden_size, 1)
             self.criterion = nn.BCEWithLogitsLoss(reduction='none')
         elif self.key == TaskRegistry.SEQ_MNIST:
-            self.readout = PooledReadout(self.hidden_size, self.graphrnn.n)
+            # if config.TYPE == "GRU":
+            #     self.readout = nn.Linear(self.hidden_size, 10)
+            # else:
+            self.readout = PooledReadout(self.hidden_size, self.recurrent_network.n)
             self.criterion = PermutedCE(reduction='none')
 
     def preprocess_inputs(self, x, targets, targets_mask):
@@ -152,7 +171,8 @@ class SeqSeqModel(nn.Module):
             targets_mask: B x T, B x T x N
         """
         if self.key == TaskRegistry.SEQ_MNIST:
-            img = F.interpolate(x, (7, 7)) # B x 1 x H x W # Super low-res
+            img = F.interpolate(x, (14, 14)) # B x 1 x H x W # Super low-res
+            # img = F.interpolate(x, (7, 7)) # B x 1 x H x W # Super low-res
             seq_img = torch.flatten(img, start_dim=1) # B x T
             seq_label = targets.unsqueeze(1).expand_as(seq_img)
             return seq_img.unsqueeze(-1), seq_label, targets_mask
@@ -184,11 +204,11 @@ class SeqSeqModel(nn.Module):
         x, targets, targets_mask = self.preprocess_inputs(x, targets, targets_mask)
         if input_mask is None and x.size(1) != targets.size(1):
             raise Exception(f"Input ({x.size(1)}) and targets ({targets.size(1)}) misaligned.")
-        state = torch.zeros(x.size(0), self.graphrnn.n, self.hidden_size, device=self.device)
+        state = torch.zeros(x.size(0), self.recurrent_network.n, self.hidden_size, device=self.device)
         all_states = [state]
         outputs = []
         for i in range(x.size(1)): # Time
-            state = self.graphrnn(x[:, i], state)
+            state = self.recurrent_network(x[:, i], state)
             if log_state:
                 all_states.append(state)
             output = self.readout(state) # B (x N) x H

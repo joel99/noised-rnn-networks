@@ -63,6 +63,7 @@ _C.MODEL.NAME = "SeqSeq"
 _C.MODEL.HIDDEN_SIZE = 32
 _C.MODEL.GRAPH_FILE = "data/configs/graphs/"
 
+_C.MODEL.TYPE = "GRNN" # Default, graph rnn. Also supports GRU, for testing SeqMNIST
 _C.MODEL.DROPOUT = .1
 _C.MODEL.INDEPENDENT_DYNAMICS = False # Do nodes have independent GRU parameters?
 _C.MODEL.AGGR = "add" # Message aggregation

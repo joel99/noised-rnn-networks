@@ -195,7 +195,8 @@ class SequentialMNISTDataset(TemporalNetworkDataset):
     def init_without_files(self, task_cfg):
         self.dataset = self.get_mnist_dataset()
         if task_cfg.NUM_STEPS < 0:
-            T = 49 # Hard-coded, revisit with below upsampling
+            T = 196 # Hard-coded, revisit with below upsampling
+            # T = 49 # Hard-coded, revisit with below upsampling
         else:
             T = task_cfg.NUM_STEPS
         self.masks = torch.zeros((len(self.dataset), T), dtype=torch.bool)
