@@ -244,7 +244,7 @@ class SeqSeqModel(nn.Module):
 
 def eval_sinusoid(outputs, targets, masks):
     return {
-        'primary': torch.masked_select(F.mse_loss(outputs, targets), masks).mean() # mse
+        'primary': torch.masked_select(F.mse_loss(outputs, targets, reduction='none'), masks).mean() # mse
     }
 
 def eval_dc(outputs, targets, masks):

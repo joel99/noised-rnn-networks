@@ -356,7 +356,7 @@ class Runner:
 
         validation_set = dataset_cls(self.config, task_cfg, filename=self.config.DATA.VAL_FILENAME, mode="val")
         validation_generator = torchData.DataLoader(validation_set,
-            batch_size=train_cfg.BATCH_SIZE, shuffle=False
+            batch_size=train_cfg.BATCH_SIZE * 4, shuffle=False
         )
 
         extra_state = self.load_checkpoint(checkpoint_path, map_location="cpu")
