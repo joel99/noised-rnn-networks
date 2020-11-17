@@ -15,7 +15,7 @@ _C = CN()
 _C.SEED = 100
 
 # Name of experiment
-_C.EXPERIMENT = "test" # cluster of runs
+_C.EXPERIMENT = "" # cluster of runs
 _C.VARIANT = "variant"
 _C.USE_TENSORBOARD = True
 _C.TENSORBOARD_DIR = "tb/"
@@ -78,7 +78,7 @@ _C.TRAIN.DO_VAL = True # Run validation while training
 _C.TRAIN.DO_R2 = True # Run validation while training
 _C.TRAIN.SPARSE_GRAPH = False # Run validation while training
 
-_C.TRAIN.BATCH_SIZE = 32
+_C.TRAIN.BATCH_SIZE = 256
 _C.TRAIN.NUM_UPDATES = 10000 # Max updates (epochs)
 _C.TRAIN.MAX_GRAD_NORM = 1.0
 
@@ -91,8 +91,8 @@ _C.TRAIN.EPS = 1e-8 # adam eps
 _C.TRAIN.PATIENCE = 20  # early stopping
 
 _C.TRAIN.CHECKPOINT_INTERVAL = 10
-_C.TRAIN.LOG_INTERVAL = 10
-_C.TRAIN.VAL_INTERVAL = 10 # Val less often so things run faster
+_C.TRAIN.LOG_INTERVAL = 5
+_C.TRAIN.VAL_INTERVAL = 5
 
 
 def get_cfg_defaults():

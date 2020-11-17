@@ -1,25 +1,15 @@
-EXPERIMENT: ""
 CHECKPOINT_DIR: "/nethome/jye72/share/noised-rnn-networks/"
 DATA:
   DATAPATH: "/nethome/jye72/projects/noised-rnn-networks/data"
-  TRAIN_FILENAME: "dc_train.pth"
-  VAL_FILENAME: "dc_val_challenge.pth"
+  TRAIN_FILENAME: "dc_train.pth" # uniform
+  VAL_FILENAME: "dc_val_challenge.pth" # unbiased
 TASK:
   KEY: "density_classification"
   NUM_NODES: 149
 MODEL:
   GRAPH_FILE: "/nethome/jye72/projects/noised-rnn-networks/configs/graphs/dc_dense/1b423_n-149_p-0.05_seed-1.edgelist"
   # GRAPH_FILE: "/nethome/jye72/projects/noised-rnn-networks/configs/graphs/n149_p0.033_dc.edgelist"
-  HIDDEN_SIZE: 32
   # AGGR: 'max'
   EMBED_EDGE: True
 TRAIN:
-  BATCH_SIZE: 64
-  LR:
-    INIT: 1e-3
-  # WEIGHT_DECAY: 0.001
-  CHECKPOINT_INTERVAL: 2
-  LOG_INTERVAL: 2
-  VAL_INTERVAL: 2
-  SPARSE_GRAPH: True
-  # .89, why is it failing?
+  WEIGHT_DECAY: 0.001

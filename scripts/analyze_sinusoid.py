@@ -59,7 +59,7 @@ def show_trial(info, i=0, node=0, save_path="sinusoid.pdf"):
     # node_in = inputs[i, :, node]
     node_out = outputs[i, :, node]
     node_target = targets[i, :, node]
-    plt.axvline(3, label="Trial start") # ! This depends on dataset
+    plt.axvline(3, label="Trial start", color="gray") # ! This depends on dataset
     plt.plot(time_range, node_out, label="prediction")
     plt.plot(time_range, node_target, label="truth")
     plt.title(f"Sinusoid Node {node}, Trial {i}")
