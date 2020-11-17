@@ -14,6 +14,7 @@ from torch import Tensor
 from torch.nn import Parameter as Param, GRUCell
 from torch_sparse import SparseTensor, matmul
 from torch_geometric.nn.conv import MessagePassing
+from torch_geometric.utils import to_undirected
 
 from src import TaskRegistry
 
@@ -31,32 +32,40 @@ class GraphRNN(MessagePassing):
         # ! By default, the edge list is read in as one direction, so we interpret as directed messages
 
     """
-    propagate_type = {'x': Tensor, 'edge_index': Tensor}
+    propagate_type = {'x': Tensor, 'edge_embedding': OptTensor}
 
 
     def __init__(self, config, task_cfg, device):
         super().__init__(aggr=config.AGGR)
-        self.config = config
+        # self.independent_dynamics = config.INDEPENDENT_DYNAMICS
 
         self.hidden_size = config.HIDDEN_SIZE
         self.dropout = config.DROPOUT
         self.input_size = task_cfg.INPUT_SIZE
-        # self.norm = nn.LayerNorm(self.hidden_size)
+        self.norm = nn.LayerNorm(self.hidden_size)
 
         G = nx.read_edgelist(config.GRAPH_FILE, nodetype=int)
-        if len(G) != task_cfg.NUM_NODES:
-            raise Exception(f"Task nodes {task_cfg.NUM_NODES} and graph nodes {len(G)} don't match.")
-        # Note - this is inherently directed
-        self.graph = torch.tensor(list(G.edges), dtype=torch.long, device=device).permute(1, 0) # edge_index - 2 x E
-
         self.n = len(G)
-        # We may do experiments with fixed dynamics across nodes
-        if config.INDEPENDENT_DYNAMICS:
-            self.rnns = nn.ModuleList([
-                nn.GRUCell(self.hidden_size, self.hidden_size) for _ in range(self.n)
-            ])
-        else:
-            self.rnn = nn.GRUCell(self.hidden_size, self.hidden_size)
+        if self.n != task_cfg.NUM_NODES:
+            raise Exception(f"Task nodes {task_cfg.NUM_NODES} and graph nodes {self.n} don't match.")
+
+        edge_index = torch.tensor(list(G.edges), dtype=torch.long, device=device).permute(1, 0) # 2 x E
+        self.graph = to_undirected(edge_index)
+
+        self.edge_embedding = None
+        if config.EMBED_EDGE:
+            self.edge_embedding = nn.Parameter(torch.rand((self.graph.size(-1), self.hidden_size,), device=device))
+
+        # row, col = to_undirected(edge_index)
+        # self.graph = SparseTensor(row=row, col=col, sparse_sizes=(self.n, self.n))
+
+        # We may do experiments without fixed dynamics across nodes
+        # if self.independent_dynamics:
+        #     self.rnns = nn.ModuleList([
+        #         nn.GRUCell(self.hidden_size, self.hidden_size) for _ in range(self.n)
+        #     ])
+        # else:
+        self.rnn = nn.GRUCell(self.hidden_size, self.hidden_size)
 
         self.state_to_message = nn.Linear(self.hidden_size, self.hidden_size)
         self.mix_input = nn.Linear(self.hidden_size + self.input_size, self.hidden_size)
@@ -79,31 +88,36 @@ class GraphRNN(MessagePassing):
         else:
             assert state.size(1) == self.n
         m = self.state_to_message(state)
-        m = self.propagate(self.graph, x=m)
+        m = self.propagate(self.graph, x=m, edge_embedding=self.edge_embedding, size=None)
         if inputs is not None:
             m_and_input = torch.cat([m, inputs], dim=-1)
             m = self.mix_input(m_and_input)
-        # m = self.norm(m)
+        m = self.norm(m)
         m = F.dropout(m, p=self.dropout, training=self.training)
-        if self.config.INDEPENDENT_DYNAMICS:
-            rnn_states = []
-            for i, rnn in enumerate(self.rnns):
-                rnn_states.append(rnn(m[:,i], state[:,i]))
-            state = torch.stack(rnn_states, dim=1)
-        else:
-            # B x N x H, B x N x H. Gru cell only supports 1 batch dim,
-            state = self.rnn(m.view(-1, self.hidden_size), state.view(-1, self.hidden_size)).view(b, self.n, -1)
+
+        # ! No independent dynamics (for JIT)
+        # if self.independent_dynamics:
+        #     rnn_states = []
+        #     for i, rnn in enumerate(self.rnns):
+        #         rnn_states.append(rnn(m[:,i], state[:,i]))
+        #     state = torch.stack(rnn_states, dim=1)
+        # else:
+
+        # B x N x H, B x N x H. Gru cell only supports 1 batch dim,
+        state = self.rnn(m.view(-1, self.hidden_size), state.view(-1, self.hidden_size)).view(b, self.n, -1)
         return state
 
     # Note - x_j is source, x_i is target
-    def message(self, x_j: Tensor):
-        return x_j
+    def message(self, x_j: Tensor, edge_embedding: OptTensor) -> Tensor:
+        # x_j: E x out_channels
+        # edge_embedding: E x out_channels -- edge embedding helps nodes recognize what signals are coming from where
+        return x_j if edge_embedding is None else x_j + edge_embedding
 
-    # Since adj is from->to, adj_t is to->from, and matmul gets everything going to x_i, which is reduced
-    # ! I don't think this gets used
-    # https://pytorch-geometric.readthedocs.io/en/latest/_modules/torch_geometric/nn/conv/message_passing.html?highlight=message_and_aggregate#
-    def message_and_aggregate(self, adj_t: SparseTensor, x: Tensor) -> Tensor:
-        return matmul(adj_t, x, reduce=self.aggr)
+    # # Since adj is from->to, adj_t is to->from, and matmul gets everything going to x_i, which is reduced
+    # # ! This won't get used unless we're using sparse tensors.
+    # # https://pytorch-geometric.readthedocs.io/en/latest/_modules/torch_geometric/nn/conv/message_passing.html?highlight=message_and_aggregate#
+    # def message_and_aggregate(self, adj_t: SparseTensor, x: Tensor) -> Tensor:
+    #     return matmul(adj_t, x, reduce=self.aggr)
 
     def __repr__(self):
         return '{}({}, num_layers={})'.format(self.__class__.__name__,
@@ -144,13 +158,14 @@ class SeqSeqModel(nn.Module):
     def __init__(self, config, task_cfg, device):
         super().__init__()
         self.key = task_cfg.KEY
+        self.is_mnist = self.key == TaskRegistry.SEQ_MNIST # for JIT
         self.hidden_size = config.HIDDEN_SIZE
         self.device = device
         self.duplicate_inputs = False
         # if config.TYPE == "GRU":
         #     self.recurrent_network = GRUWrapper(task_cfg.INPUT_SIZE, self.hidden_size)
         # else:
-        self.recurrent_network = GraphRNN(config, task_cfg, device) # .jittable()
+        self.recurrent_network = GraphRNN(config, task_cfg, device).jittable()
 
         self.init_readout()
 
@@ -160,6 +175,7 @@ class SeqSeqModel(nn.Module):
             self.criterion = nn.MSELoss(reduction='none')
         elif self.key == TaskRegistry.DENSITY_CLASS:
             self.readout = nn.Linear(self.hidden_size, 1)
+            # Hmm... we're not quite getting it.
             self.criterion = nn.BCEWithLogitsLoss(reduction='none')
         elif self.key == TaskRegistry.SEQ_MNIST:
             self.readout = PooledReadout(self.hidden_size, self.recurrent_network.n)
@@ -171,7 +187,7 @@ class SeqSeqModel(nn.Module):
             targets: B x Raw (e.g. L)
             targets_mask: B x T, B x T x N
         """
-        if self.key == TaskRegistry.SEQ_MNIST:
+        if self.is_mnist:
             img = F.interpolate(x, (14, 14)) # B x 1 x H x W # Super low-res
             # img = F.interpolate(x, (7, 7)) # B x 1 x H x W # Super low-res
             seq_img = torch.flatten(img, start_dim=1) # B x T
@@ -184,9 +200,9 @@ class SeqSeqModel(nn.Module):
         x,
         targets,
         targets_mask,
-        input_mask=None,
-        log_state=False,
-        perturb: Optional[torch.tensor]=None,
+        input_mask: Optional[Tensor] = None,
+        log_state: bool = False,
+        perturb: Optional[Tensor] = None,
     ):
         r"""
             Calculate loss.
@@ -206,12 +222,12 @@ class SeqSeqModel(nn.Module):
         if input_mask is None and x.size(1) != targets.size(1):
             raise Exception(f"Input ({x.size(1)}) and targets ({targets.size(1)}) misaligned.")
         state = torch.zeros(x.size(0), self.recurrent_network.n, self.hidden_size, device=self.device)
-        all_states = [state]
+        # all_states = [state]
         outputs = []
         for i in range(x.size(1)): # Time
-            state = self.recurrent_network(x[:, i], state)
-            if log_state:
-                all_states.append(state)
+            state = self.recurrent_network(x[:, i], state) # torchscript doesn't work here.. not sure what the issue is https://discuss.pytorch.org/t/runtimeerror-no-grad-accumulator-for-a-saved-leaf-error/59539/3
+            # if log_state:
+            #     all_states.append(state)
             output = self.readout(state) # B (x N) x H
             outputs.append(output)
 
@@ -227,15 +243,32 @@ class SeqSeqModel(nn.Module):
 # Evaluation functions (e.g. accuracy)
 
 def eval_sinusoid(outputs, targets, masks):
-    return torch.masked_select(F.mse_loss(outputs, targets), masks).mean()
+    return {
+        'primary': torch.masked_select(F.mse_loss(outputs, targets), masks).mean() # mse
+    }
 
 def eval_dc(outputs, targets, masks):
     r"""
-        TODO: confidence?
+        outputs: B x T x N x 1
+        # ! In cellular automata (mitchell et al) a final convergent state was required to score any points
+        # However, this is not a very smooth metric for us to evaluate performance, we will simply take the average
+        # Nonetheless we will compute total agreement labels for reference
     """
+    outputs = outputs.squeeze(-1)
+    targets = targets.squeeze(-1)
+    masks = masks.squeeze(-1)
+    b, t, n = outputs.size()
     predicted = outputs > 0.5
-    masked_predictions = torch.masked_select(predicted == targets, masks) # B x 1
-    return masked_predictions.float().mean()
+    consensus_probe = predicted[..., 0:1].expand(b, t, n) # b x t x 1st node
+    consensus = consensus_probe.all(-1, keepdim=True).expand_as(masks) # b x t x 1
+    consensus_mask = consensus & masks
+    targets_matched = predicted == targets # b x t x n
+    masked_predictions = torch.masked_select(targets_matched, masks) # B x 1
+    consensus_predictions = torch.masked_select(targets_matched, consensus_mask) # <= B x 1
+    return {
+        'primary': masked_predictions.float().mean(),
+        'average': torch.true_divide(consensus_predictions.sum(), (b*n))
+    }
     # ! note because we aggregate over predictions, this is a strict upper bound...
     # We likely have a much lower scorer if we require everything to be the same...
     # return torch.true_divide(masked_predictions.sum(), masked_predictions.size(0))
@@ -246,7 +279,9 @@ def eval_seq_mnist(outputs, targets, masks):
     # Masks, in this case is only the last element. So we'll get B x 1
     masked_predictions = torch.masked_select(predicted, masks) # B x 1
     # return (masked_predictions == targets).sum() / masked_predictions.size(0)
-    return (masked_predictions == targets).float().mean()
+    return {
+        'primary': (masked_predictions == targets).float().mean()
+    }
 
 class EvalRegistry:
     r"""
@@ -258,7 +293,7 @@ class EvalRegistry:
             targets: B x T (x N) x H
             masks: B x T (x N)
         Returns:
-            metric: scalar summary
+            metric: dict of scalars summary
     """
 
     _registry = {

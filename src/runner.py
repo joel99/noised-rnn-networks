@@ -6,7 +6,7 @@ import os.path as osp
 
 import time
 from typing import Any, Dict, List, Optional
-
+from collections import defaultdict
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -25,7 +25,6 @@ from src.utils import linear_decay, get_lightest_gpus
 
 """
 Runner class orchestrates model usage.
-TODO: add task based model heads
 """
 
 class Runner:
@@ -69,6 +68,9 @@ class Runner:
             gpu_indices = [self.device_gpu] + gpu_indices # Make sure our primary gpu is first
             self.model = nn.DataParallel(self.model, device_ids=gpu_indices)
         self.model = self.model.to(self.device)
+        if self.config.TRAIN.JIT:
+            self.model.recurrent_network = torch.jit.script(self.model.recurrent_network)
+            # self.model = torch.jit.script(self.model) # Some autograd issue with the recurrent step
 
     def _get_parameters(self):
         return self.model.parameters()
@@ -161,8 +163,6 @@ class Runner:
         train_cfg = self.config.TRAIN
         task_cfg = self.config.TASK
 
-        if train_cfg.JIT:
-            self.model = torch.jit.script(self.model)
 
         dataset_cls = DatasetRegistry.get_dataset(task_cfg.KEY)
 
@@ -261,7 +261,7 @@ class Runner:
                     self.model.eval()
                     with torch.no_grad():
                         eval_losses = 0
-                        total_metric = 0
+                        total_metrics = defaultdict(lambda: 0)
                         total_count = 0
                         for x, targets, masks in validation_generator:
                             x = x.to(self.device)
@@ -270,11 +270,15 @@ class Runner:
                             loss, outputs = self.model(x, targets, masks)
                             batch_size = x.size(0)
                             total_count += batch_size
-                            metric = EvalRegistry.eval_task(task_cfg.KEY, outputs, targets, masks) # this 3200, and total metric is 6400
-                            total_metric += batch_size * metric.item()
+                            metrics = EvalRegistry.eval_task(task_cfg.KEY, outputs, targets, masks) # this 3200, and total metric is 6400
+                            for key in metrics:
+                                total_metrics[key] += batch_size * metrics[key].item()
+                            # total_metric += batch_size * metric.item()
                             eval_losses += loss.mean().item() * batch_size
                         val_loss = eval_losses / total_count
-                        total_metric /= total_count
+                        for key in total_metrics:
+                            total_metrics[key] /= total_count
+                        # total_metric /= total_count
 
                         writer.add_scalar(
                             "val_loss",
@@ -282,19 +286,26 @@ class Runner:
                             update,
                         )
 
-                        writer.add_scalar(
+                        writer.add_scalars(
                             "eval_metric", # e.g. accuracy
-                            total_metric,
+                            total_metrics,
                             update,
                         )
 
                         if self._do_log(update):
                             self.logger.queue_stat("val loss", val_loss)
-                            self.logger.queue_stat("eval metric", total_metric)
+                            self.logger.queue_stat(f"eval metrics", total_metrics)
 
                         if self.best_val["value"] > val_loss:
                             self.best_val["value"] = val_loss
                             self.best_val["update"] = update
+                            self.save_checkpoint(
+                                f"{self.config.VARIANT}.lve.pth", dict(
+                                        update=update,
+                                        checkpoint=count_checkpoints,
+                                        pth_time=pth_time,
+                                    )
+                            )
                         elif update - self.best_val["update"] > train_cfg.PATIENCE:
                             self.logger.info(f"Val loss has not improved for {train_cfg.PATIENCE} updates. Stopping...")
                             do_stop = True
@@ -357,7 +368,7 @@ class Runner:
         ) as writer:
             with torch.no_grad():
                 eval_losses = 0
-                total_metric = 0
+                total_metrics = defaultdict(lambda: 0)
                 total_count = 0
                 all_inputs = []
                 all_outputs = []
@@ -374,11 +385,14 @@ class Runner:
                     all_masks.append(masks)
                     batch_size = x.size(0)
                     total_count += batch_size
-                    metric = EvalRegistry.eval_task(task_cfg.KEY, outputs, targets, masks)
-                    total_metric += batch_size * metric
+                    metrics = EvalRegistry.eval_task(task_cfg.KEY, outputs, targets, masks)
+                    for key in metrics:
+                        total_metrics[key] += batch_size * metrics[key].item()
+                    # total_metric += batch_size * metric
                     eval_losses += loss.mean().item() * batch_size
                 eval_losses /= total_count
-                total_metric /= total_count
+                for key in total_metrics:
+                    total_metrics[key] /= total_count
 
                 # Wrap up and package for return
                 all_inputs = torch.cat(all_inputs, dim=0)
@@ -402,16 +416,18 @@ class Runner:
                         updates,
                     )
 
-                    writer.add_scalar(
+                    writer.add_scalars(
                         "eval_metric", # e.g. accuracy
-                        total_metric,
+                        total_metrics,
                         updates,
                     )
 
                 self.logger.info(f"Eval loss: {eval_losses}")
-                self.logger.info(f"Eval metric: {total_metric}")
+                self.logger.queue_stat(f"eval metrics", total_metrics)
+                stat_str = "\t".join([f"{stat[0]}: {stat[1]:.3f}" for stat in self.logger.empty_queue()])
+                self.logger.info(stat_str)
                 metrics = {
                     "loss": eval_losses,
-                    "metric": total_metric
+                    "metrics": total_metrics
                 }
                 return metrics, info

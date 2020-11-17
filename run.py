@@ -169,9 +169,9 @@ def launch_single(config: CN, run_type: str, ckpt_path: str, clear_only=False):
         check_exists(config.CHECKPOINT_DIR, preserve=False)
         check_exists(config.LOG_DIR, preserve=False)
         exit(0)
-    runner = Runner(config)
     if run_type == "train":
         if ckpt_path is not None:
+            runner = Runner(config)
             runner.train(checkpoint_path=ckpt_path)
         else:
             if DO_PRESERVE_RUNS:
@@ -183,8 +183,10 @@ def launch_single(config: CN, run_type: str, ckpt_path: str, clear_only=False):
                 check_exists(config.TENSORBOARD_DIR)
                 check_exists(config.CHECKPOINT_DIR)
                 check_exists(config.LOG_DIR)
+            runner = Runner(config)
             runner.train()
     elif run_type == "eval":
+        runner = Runner(config)
         runner.eval(checkpoint_path=ckpt_path)
 
 if __name__ == "__main__":

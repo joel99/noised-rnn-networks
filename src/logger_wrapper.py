@@ -36,7 +36,11 @@ class Logger(logging.Logger):
         self.handlers = [h for h in self.handlers if isinstance(h, logging.StreamHandler)]
 
     def queue_stat(self, stat_name, stat):
-        self.stat_queue.append((stat_name, stat))
+        if isinstance(stat, dict):
+            for key in stat:
+                self.stat_queue.append((f"{stat_name}/{key}", stat[key]))
+        else:
+            self.stat_queue.append((stat_name, stat))
 
     def empty_queue(self):
         queue = copy.deepcopy(self.stat_queue)

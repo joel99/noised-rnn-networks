@@ -59,7 +59,7 @@ def dc_generator(
 
 #%%
 # Generate and save data
-num_trials = 10000
+num_trials = 100000
 n = 999
 data = dc_generator(
     n=n,
@@ -88,7 +88,7 @@ torch.save(train_dict, osp.join(data_dir, "dc_train_challenge.pth"))
 torch.save(val_dict, osp.join(data_dir, "dc_val_challenge.pth"))
 
 #%%
-num_trials = 10000 # 100K doesn't really make a difference.
+num_trials = 50000 # 50K since we're overfitting
 n = 999
 data = dc_generator(
     n=n,

@@ -67,14 +67,16 @@ _C.MODEL.TYPE = "GRNN" # Default, graph rnn. Also supports GRU, for testing SeqM
 _C.MODEL.DROPOUT = .1
 _C.MODEL.INDEPENDENT_DYNAMICS = False # Do nodes have independent GRU parameters?
 _C.MODEL.AGGR = "add" # Message aggregation
+_C.MODEL.EMBED_EDGE = False # Add edge embedding
 
 # -----------------------------------------------------------------------------
 # Train Config
 # -----------------------------------------------------------------------------
 _C.TRAIN = CN()
-_C.TRAIN.JIT = False # Unsupported...
+_C.TRAIN.JIT = True
 _C.TRAIN.DO_VAL = True # Run validation while training
 _C.TRAIN.DO_R2 = True # Run validation while training
+_C.TRAIN.SPARSE_GRAPH = False # Run validation while training
 
 _C.TRAIN.BATCH_SIZE = 32
 _C.TRAIN.NUM_UPDATES = 10000 # Max updates (epochs)

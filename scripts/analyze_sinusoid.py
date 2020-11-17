@@ -28,7 +28,7 @@ import networkx as nx
 from analyze_utils import init
 
 variant = "sinusoid"
-ckpt = 14
+ckpt = 13
 
 # variant = "sinusoid"
 # ckpt = 14

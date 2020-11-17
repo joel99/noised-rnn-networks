@@ -11,7 +11,7 @@ TASK:
   AGGREGATE_OUTPUT: True
 MODEL:
   HIDDEN_SIZE: 64
-  GRAPH_FILE: "configs/graphs/n10_p0.6_test.edgelist"
+  GRAPH_FILE: "/nethome/jye72/projects/noised-rnn-networks/configs/graphs/n10_p0.6_test.edgelist"
 TRAIN:
   LR:
     INIT: 1.0e-3
