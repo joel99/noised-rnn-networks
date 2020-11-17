@@ -84,7 +84,7 @@ def check_exists(path, preserve=DO_PRESERVE_RUNS):
         return True
     return False
 
-def prepare_config(exp_config: Union[List[str], str], run_type: str, ckpt_path="", opts=None, suffix=None) -> Tuple[CN, str]:
+def prepare_config(exp_config: Union[List[str], str], run_type: str, ckpt_path="", opts=None, suffix=None, graph_file=None) -> Tuple[CN, str]:
     r"""Prepare config node / do some preprocessing
 
     Args:
@@ -115,6 +115,9 @@ def prepare_config(exp_config: Union[List[str], str], run_type: str, ckpt_path="
 
     if osp.exists(config.MODEL.GRAPH_FILE) and not osp.isdir(config.MODEL.GRAPH_FILE):
         graph_id = osp.split(config.MODEL.GRAPH_FILE)[1][:5]
+        add_suffix(config, graph_id)
+    elif graph_file is not None and osp.isdir(config.MODEL.GRAPH_FILE):
+        graph_id = graph_file[:5]
         add_suffix(config, graph_id)
 
     if ckpt_path is not None:

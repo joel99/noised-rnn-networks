@@ -28,9 +28,10 @@ from torch.utils import data
 from analyze_utils import init
 
 variant = "seq_mnist_2"
-ckpt = 10
+graph_file = "n10_p"
+ckpt = 6
 
-runner, ckpt_path = init(variant, ckpt)
+runner, ckpt_path = init(variant, ckpt, graph_file)
 #%%
 
 metrics, info = runner.eval(ckpt_path)

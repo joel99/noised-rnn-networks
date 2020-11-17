@@ -27,54 +27,45 @@ from torch.utils import data
 
 from analyze_utils import init
 
-variant = "seq_mnist"
-ckpt = 14
-
-variant = "sinusoid"
-ckpt = 14
 
 variant = "dc"
-ckpt = 1
-runner, ckpt_path = init(variant, ckpt)
+ckpt = 11
+graph_file = "n149_"
+runner, ckpt_path = init(variant, ckpt, graph_file=graph_file)
 #%%
 
-inputs, outputs, targets, masks = runner.eval(ckpt_path)
+metrics, info = runner.eval(ckpt_path)
+inputs, outputs, targets, masks = info
 
 
 #%%
-# Sinusoid
-def show_trial(i=0, node=0):
-    print(masks[i].size())
-    time_range = torch.arange(inputs.size(1)) # 23, 23 10 1
-    # node_in = inputs[i, :, node]
-    node_out = outputs[i, :, node]
-    node_target = targets[i, :, node]
-    plt.axvline(3, label="Trial start") # ! This depends on dataset
-    plt.plot(time_range, node_out, label="prediction")
-    plt.plot(time_range, node_target, label="truth")
-    plt.title(f"Sinusoid Eval Node {node}, Trial {i}")
-    plt.legend(loc=(0.7, 0.1))
-show_trial(5, 6)
+inputs = info["inputs"]
+outputs = info["outputs"]
+targets = info["targets"]
+masks = info["masks"]
 
-# Checks out. We're good with this task
 
 #%%
+import seaborn as sns
 # DC
 
 # We are most definitely not learning. Why? Signal is sparse.
+# inputs: B x T x N x 1
+# We want to see what's happening in all nodes over time (T x N)
 def show_trial(i=0, node=0):
-    print(masks[i].size())
-    print(inputs[i].size())
     time_range = torch.arange(inputs.size(1)) # 23, 23 10 1
     node_in = inputs[i, :, node]
+    print(inputs.size())
+    print(inputs[i, 0])
     node_out = outputs[i, :, node]
     node_target = targets[i, :, node]
-    plt.plot(time_range, node_in, label="input")
-    plt.plot(time_range, node_out, label="prediction")
+    sns.heatmap(outputs[i].squeeze())
+    # plt.plot(time_range, node_in, label="input")
+    # plt.plot(time_range, node_out, label="prediction")
     # plt.plot(time_range, node_target, label="truth")
     plt.title(f"DC Node {node} Input {node_in[0].item()}| Trial {i} Target {node_target[0].item()}")
     plt.legend(loc=(0.7, 0.1))
-show_trial(5, 3)
+show_trial(9, 12)
 
 #%%
 # MNIST

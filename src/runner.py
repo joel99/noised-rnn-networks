@@ -161,6 +161,9 @@ class Runner:
         train_cfg = self.config.TRAIN
         task_cfg = self.config.TASK
 
+        if train_cfg.JIT:
+            self.model = torch.jit.script(self.model)
+
         dataset_cls = DatasetRegistry.get_dataset(task_cfg.KEY)
 
         training_set = dataset_cls(self.config, task_cfg, filename=self.config.DATA.TRAIN_FILENAME, mode="train")

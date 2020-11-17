@@ -1,22 +1,23 @@
 EXPERIMENT: ""
-# Not quite working well. We should sweep in the meantime to try to get this working.
 CHECKPOINT_DIR: "/nethome/jye72/share/noised-rnn-networks/"
 DATA:
   DATAPATH: "/nethome/jye72/projects/noised-rnn-networks/data"
   TRAIN_FILENAME: "dc_train.pth"
-  VAL_FILENAME: "dc_val.pth"
-  # OVERFIT_TEST: True
+  VAL_FILENAME: "dc_val_challenge.pth"
 TASK:
   KEY: "density_classification"
   NUM_NODES: 149
 MODEL:
-  GRAPH_FILE: "configs/graphs/n149_p0.033_dc.edgelist"
+  GRAPH_FILE: "/nethome/jye72/projects/noised-rnn-networks/configs/graphs/n149_p0.033_dc.edgelist"
   HIDDEN_SIZE: 32
+  AGGR: 'max'
 TRAIN:
-  BATCH_SIZE: 32
+  BATCH_SIZE: 64
   LR:
-    INIT: 1e-4
-  WEIGHT_DECAY: 0.001
-  CHECKPOINT_INTERVAL: 10
-  LOG_INTERVAL: 10
-  VAL_INTERVAL: 10
+    INIT: 1e-3
+  # WEIGHT_DECAY: 0.001
+  CHECKPOINT_INTERVAL: 2
+  LOG_INTERVAL: 2
+  VAL_INTERVAL: 2
+
+  # .89, why is it failing?

@@ -2,13 +2,21 @@ EXPERIMENT: ""
 CHECKPOINT_DIR: "/nethome/jye72/share/noised-rnn-networks/"
 DATA:
   DATAPATH: "/nethome/jye72/projects/noised-rnn-networks/data"
-  TRAIN_FILENAME: "sin_train.pth"
-  VAL_FILENAME: "sin_val.pth"
+  TRAIN_FILENAME: "dc_train.pth"
+  VAL_FILENAME: "dc_val_challenge.pth"
 TASK:
-  KEY: "sinusoid"
+  KEY: "density_classification"
+  NUM_NODES: 10
 MODEL:
   GRAPH_FILE: "/nethome/jye72/projects/noised-rnn-networks/configs/graphs/n10_p0.6_test.edgelist"
+  HIDDEN_SIZE: 32
 TRAIN:
-  BATCH_SIZE: 100
+  BATCH_SIZE: 64
+  LR:
+    INIT: 1e-3
+  WEIGHT_DECAY: 0.001
   CHECKPOINT_INTERVAL: 10
-  PATIENCE: 50
+  LOG_INTERVAL: 10
+  VAL_INTERVAL: 10
+
+  # .89, why is it failing?

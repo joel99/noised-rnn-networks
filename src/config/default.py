@@ -72,7 +72,7 @@ _C.MODEL.AGGR = "add" # Message aggregation
 # Train Config
 # -----------------------------------------------------------------------------
 _C.TRAIN = CN()
-
+_C.TRAIN.JIT = False # Unsupported...
 _C.TRAIN.DO_VAL = True # Run validation while training
 _C.TRAIN.DO_R2 = True # Run validation while training
 
@@ -81,12 +81,12 @@ _C.TRAIN.NUM_UPDATES = 10000 # Max updates (epochs)
 _C.TRAIN.MAX_GRAD_NORM = 1.0
 
 _C.TRAIN.LR = CN()
-_C.TRAIN.LR.INIT = 1e-2
+_C.TRAIN.LR.INIT = 1e-3
 _C.TRAIN.LR.SCHEDULE = True
 _C.TRAIN.LR.RESTARTS = 1
 _C.TRAIN.WEIGHT_DECAY = 0.0
 _C.TRAIN.EPS = 1e-8 # adam eps
-_C.TRAIN.PATIENCE = 500  # early stopping
+_C.TRAIN.PATIENCE = 20  # early stopping
 
 _C.TRAIN.CHECKPOINT_INTERVAL = 10
 _C.TRAIN.LOG_INTERVAL = 10

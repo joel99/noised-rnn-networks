@@ -27,14 +27,16 @@ import networkx as nx
 
 from analyze_utils import init
 
-variant = "seq_mnist"
-ckpt = 14
-
 variant = "sinusoid"
 ckpt = 14
 
+# variant = "sinusoid"
+# ckpt = 14
+
 runner, ckpt_path = init(variant, ckpt)
 
+#%%
+print(ckpt_path)
 #%%
 G = nx.read_edgelist(runner.config.MODEL.GRAPH_FILE)
 nx.draw(G)

@@ -171,6 +171,7 @@ class DensityClassificationDataset(TemporalNetworkDataset):
             T = int(3 * math.log(N) / math.log(2)) # For N from 149 to 999, this is around 20 - 30 timesteps.
         else:
             T = task_cfg.NUM_STEPS
+        print(T)
         # We require our graphs to be fully connected, for simplicity, so the true diameter is shorter (6-10).
         # So this should be ample computation time?
         self.inputs = torch.zeros((B, T, N, 1))

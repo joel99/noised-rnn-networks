@@ -29,7 +29,7 @@ GENERATORS = {
     "erdos-renyi": nx.erdos_renyi_graph
 }
 
-def make_and_save_graph(params: dict, experiment_name, generator=graph_generator):
+def make_and_save_graph(params: dict, experiment_name, generator=graph_generator, show=False):
     param_strs = [f"{k}-{v}" for k, v in params.items()]
     param_str = "_".join(param_strs)
     param_id = hashlib.md5(param_str.encode()).hexdigest()[:5]
@@ -42,6 +42,8 @@ def make_and_save_graph(params: dict, experiment_name, generator=graph_generator
     G = gen_class(params.get("n"), params.get("p"), seed=params.get("seed"))
     # TODO disallow >1 CC
     nx.write_edgelist(G, target_path)
+    if show:
+        nx.draw(G)
 
 # make_and_save_graph()
 
@@ -50,8 +52,8 @@ def make_and_save_graph(params: dict, experiment_name, generator=graph_generator
 
 #%%
 # Test graphs of varying average degree
-experiment_name = "sin_seed_test"
-base_param = {"n": 10, "p": 0.65}
-for seed in range(5):
+experiment_name = "dc_dense"
+base_param = {"n": 149, "p": 0.5}
+for seed in range(1):
     base_param["seed"] = seed
-    make_and_save_graph(base_param, experiment_name)
+    make_and_save_graph(base_param, experiment_name, show=True)

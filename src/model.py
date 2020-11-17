@@ -3,6 +3,7 @@
 
 import networkx as nx
 
+from typing import Optional
 from torch_geometric.typing import Adj, OptTensor
 
 import torch
@@ -30,6 +31,9 @@ class GraphRNN(MessagePassing):
         # ! By default, the edge list is read in as one direction, so we interpret as directed messages
 
     """
+    propagate_type = {'x': Tensor, 'edge_index': Tensor}
+
+
     def __init__(self, config, task_cfg, device):
         super().__init__(aggr=config.AGGR)
         self.config = config
@@ -39,17 +43,17 @@ class GraphRNN(MessagePassing):
         self.input_size = task_cfg.INPUT_SIZE
         # self.norm = nn.LayerNorm(self.hidden_size)
 
-        G = nx.read_edgelist(config.GRAPH_FILE, nodetype=int) # is this really 2xE
+        G = nx.read_edgelist(config.GRAPH_FILE, nodetype=int)
         if len(G) != task_cfg.NUM_NODES:
             raise Exception(f"Task nodes {task_cfg.NUM_NODES} and graph nodes {len(G)} don't match.")
         # Note - this is inherently directed
-        self.graph = torch.tensor(list(G.edges), dtype=torch.long, device=device).permute(1, 0) # edge_index
+        self.graph = torch.tensor(list(G.edges), dtype=torch.long, device=device).permute(1, 0) # edge_index - 2 x E
 
         self.n = len(G)
         # We may do experiments with fixed dynamics across nodes
         if config.INDEPENDENT_DYNAMICS:
             self.rnns = nn.ModuleList([
-                nn.GRUCell(config.INPUT_SIZE, self.hidden_size) for _ in range(self.n)
+                nn.GRUCell(self.hidden_size, self.hidden_size) for _ in range(self.n)
             ])
         else:
             self.rnn = nn.GRUCell(self.hidden_size, self.hidden_size)
@@ -59,7 +63,7 @@ class GraphRNN(MessagePassing):
 
         self.device = device
 
-    def forward(self, inputs: Tensor, state: Tensor,) -> Tensor:
+    def forward(self, inputs: Tensor, state: Tensor) -> Tensor:
         r"""
             Will create messages from state and message neighbors.
             Nodes step recurrent state based on messages and input, if available.
@@ -143,14 +147,14 @@ class SeqSeqModel(nn.Module):
         self.hidden_size = config.HIDDEN_SIZE
         self.device = device
         self.duplicate_inputs = False
-        if config.TYPE == "GRU":
-            self.recurrent_network = GRUWrapper(task_cfg.INPUT_SIZE, self.hidden_size)
-        else:
-            self.recurrent_network = GraphRNN(config, task_cfg, device)
+        # if config.TYPE == "GRU":
+        #     self.recurrent_network = GRUWrapper(task_cfg.INPUT_SIZE, self.hidden_size)
+        # else:
+        self.recurrent_network = GraphRNN(config, task_cfg, device) # .jittable()
 
-        self.init_readout(config)
+        self.init_readout()
 
-    def init_readout(self, config):
+    def init_readout(self):
         if self.key == TaskRegistry.SINUSOID:
             self.readout = nn.Linear(self.hidden_size, 1)
             self.criterion = nn.MSELoss(reduction='none')
@@ -158,9 +162,6 @@ class SeqSeqModel(nn.Module):
             self.readout = nn.Linear(self.hidden_size, 1)
             self.criterion = nn.BCEWithLogitsLoss(reduction='none')
         elif self.key == TaskRegistry.SEQ_MNIST:
-            # if config.TYPE == "GRU":
-            #     self.readout = nn.Linear(self.hidden_size, 10)
-            # else:
             self.readout = PooledReadout(self.hidden_size, self.recurrent_network.n)
             self.criterion = PermutedCE(reduction='none')
 
@@ -185,7 +186,7 @@ class SeqSeqModel(nn.Module):
         targets_mask,
         input_mask=None,
         log_state=False,
-        perturb=None,
+        perturb: Optional[torch.tensor]=None,
     ):
         r"""
             Calculate loss.
@@ -233,13 +234,18 @@ def eval_dc(outputs, targets, masks):
         TODO: confidence?
     """
     predicted = outputs > 0.5
-    masked_predictions = torch.masked_select(predicted, masks) # B x 1
-    return (masked_predictions == targets).float().mean()
+    masked_predictions = torch.masked_select(predicted == targets, masks) # B x 1
+    return masked_predictions.float().mean()
+    # ! note because we aggregate over predictions, this is a strict upper bound...
+    # We likely have a much lower scorer if we require everything to be the same...
+    # return torch.true_divide(masked_predictions.sum(), masked_predictions.size(0))
 
 
 def eval_seq_mnist(outputs, targets, masks):
     _, predicted = torch.max(outputs, 2) # B x T
+    # Masks, in this case is only the last element. So we'll get B x 1
     masked_predictions = torch.masked_select(predicted, masks) # B x 1
+    # return (masked_predictions == targets).sum() / masked_predictions.size(0)
     return (masked_predictions == targets).float().mean()
 
 class EvalRegistry:

@@ -43,9 +43,9 @@ def dc_generator(
 ):
     r"""
         seed: random seed
-        dim: number of different sinusoids, corresponding to number of modules in network
+        n: nodes in network
         num_trials: number of data points
-        p: Bernoulli param for IC, or Bernoulli range
+        p: Bernoulli param for IC, or Bernoulli range (e.g. [0,1] as used in Mitchell et al)
     """
     assert n % 2, "n must be odd to guarantee well-defined task density flag"
     torch.manual_seed(seed)
@@ -88,7 +88,7 @@ torch.save(train_dict, osp.join(data_dir, "dc_train_challenge.pth"))
 torch.save(val_dict, osp.join(data_dir, "dc_val_challenge.pth"))
 
 #%%
-num_trials = 10000
+num_trials = 10000 # 100K doesn't really make a difference.
 n = 999
 data = dc_generator(
     n=n,
@@ -113,5 +113,7 @@ val_dict = dict(
     key=TASK_KEY,
     data=val_data,
 )
+print(torch.sum(data, dim=1))
+
 torch.save(train_dict, osp.join(data_dir, "dc_train.pth"))
 torch.save(val_dict, osp.join(data_dir, "dc_val.pth"))

@@ -7,9 +7,8 @@ if module_path not in sys.path:
     sys.path.append(module_path)
 
 from src.runner import Runner
-from run import prepare_config
-
-def init(variant, ckpt, base="", prefix=""):
+from run import prepare_config, add_suffix
+def init(variant, ckpt, base="", prefix="", graph_file=None):
     # Initialize model
 
     run_type = "eval"
@@ -22,12 +21,11 @@ def init(variant, ckpt, base="", prefix=""):
             exp_config, run_type, ckpt_path, [
                 "USE_TENSORBOARD", False,
                 "SYSTEM.NUM_GPUS", 1,
-            ], suffix=prefix
+            ], suffix=prefix, graph_file=graph_file
         )
-    # TODO This won't include the graph file update
     # Update relative path
     config.defrost()
-    config.MODEL.GRAPH_FILE = f"../{config.MODEL.GRAPH_FILE}"
+    # Incorporate graph file into this loading. Currently, it will use the default one in the config.
     config.freeze()
     runner = Runner(config)
     runner.logger.clear_filehandlers()
