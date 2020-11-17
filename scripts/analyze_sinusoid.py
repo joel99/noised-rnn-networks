@@ -22,25 +22,22 @@ import torch
 import torch.nn.functional as f
 from torch.utils import data
 import networkx as nx
-# Ignore model logs in notebooks
-# logger.mute()
 
 from analyze_utils import init
 
+variant = "sinusoid_test"
+
 variant = "sinusoid"
-ckpt = 13
+runner, ckpt_path = init(variant)
 
-# variant = "sinusoid"
-# ckpt = 14
-
-runner, ckpt_path = init(variant, ckpt)
-
-#%%
+# We are prototyping on a single seed, and then writing a script to get
+# quantitative numbers for all seeds
 print(ckpt_path)
+
 #%%
 G = nx.read_edgelist(runner.config.MODEL.GRAPH_FILE)
 nx.draw(G)
-plt.savefig("network.pdf")
+# plt.savefig("network.pdf")
 #%%
 metrics, info = runner.eval(ckpt_path, save_path=None, log_tb=False, perturb=None)
 inputs = info["inputs"]

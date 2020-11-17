@@ -150,8 +150,9 @@ def run_exp(
     if not sweep:
         launch_single(config, run_type, ckpt_path, **kwargs)
     else:
+        # sweeps in for loop
         assert ckpt_path is None, "sweep not supported with checkpoints"
-        graph_files = os.listdir(config.MODEL.GRAPH_FILE)
+        graph_files = [f for f in os.listdir(config.MODEL.GRAPH_FILE) if f.endswith('.edgelist')]
         all_configs = []
         for graph in graph_files:
             graph_cfg = config.clone()

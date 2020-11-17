@@ -4,8 +4,9 @@ DATA:
   TRAIN_FILENAME: "sin_train.pth"
   VAL_FILENAME: "sin_val.pth"
 TASK:
+  NUM_NODES: 12
   KEY: "sinusoid"
 MODEL:
-  GRAPH_FILE: "/nethome/jye72/projects/noised-rnn-networks/configs/graphs/n10_p0.6_test.edgelist"
+  GRAPH_FILE: "/nethome/jye72/projects/noised-rnn-networks/configs/graphs/er_n12/"
 TRAIN:
   PATIENCE: 20

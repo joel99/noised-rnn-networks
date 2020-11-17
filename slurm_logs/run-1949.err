@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "run.py", line 194, in <module>
+    main()
+  File "run.py", line 76, in main
+    run_exp(**vars(args))
+  File "run.py", line 149, in run_exp
+    config, ckpt_path = prepare_config(exp_config, run_type, ckpt_path, opts, suffix=suffix)
+  File "run.py", line 99, in prepare_config
+    config = get_config(exp_config, opts)
+  File "/nethome/jye72/projects/noised-rnn-networks/src/config/default.py", line 125, in get_config
+    config.merge_from_file(config_path)
+  File "/nethome/jye72/anaconda3/envs/habitat2/lib/python3.6/site-packages/yacs/config.py", line 211, in merge_from_file
+    with open(cfg_filename, "r") as f:
+FileNotFoundError: [Errno 2] No such file or directory: 'configs/--exp-config.yaml'

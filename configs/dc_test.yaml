@@ -7,7 +7,7 @@ TASK:
   KEY: "density_classification"
   NUM_NODES: 149
 MODEL:
-  GRAPH_FILE: "/nethome/jye72/projects/noised-rnn-networks/configs/graphs/er_n149"
+  GRAPH_FILE: "/nethome/jye72/projects/noised-rnn-networks/configs/graphs/n149_p0.033_dc.edgelist"
   # AGGR: 'max'
   EMBED_EDGE: True
 TRAIN:

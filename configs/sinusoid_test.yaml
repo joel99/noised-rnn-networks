@@ -1,22 +1,11 @@
-EXPERIMENT: ""
 CHECKPOINT_DIR: "/nethome/jye72/share/noised-rnn-networks/"
 DATA:
   DATAPATH: "/nethome/jye72/projects/noised-rnn-networks/data"
-  TRAIN_FILENAME: ""
-  VAL_FILENAME: ""
+  TRAIN_FILENAME: "sin_train.pth"
+  VAL_FILENAME: "sin_val.pth"
 TASK:
-  KEY: "seq_mnist"
-  NUM_STEPS: -1
-  AGGREGATE_INPUT: True
-  AGGREGATE_OUTPUT: True
+  KEY: "sinusoid"
 MODEL:
-  HIDDEN_SIZE: 64
   GRAPH_FILE: "/nethome/jye72/projects/noised-rnn-networks/configs/graphs/n10_p0.6_test.edgelist"
 TRAIN:
-  LR:
-    INIT: 1.0e-3
-  BATCH_SIZE: 512
-  LOG_INTERVAL: 1
-  VAL_INTERVAL: 1
-  CHECKPOINT_INTERVAL: 5
   PATIENCE: 20

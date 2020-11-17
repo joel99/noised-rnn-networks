@@ -1,0 +1,15 @@
+2020-11-17 15:46:41,781 Using 1 GPUs
+2020-11-17 15:46:41,782 Using cuda:0
+2020-11-17 15:46:46,649 number of trainable parameters: 47233
+2020-11-17 15:48:43,175 update: 5	loss: 0.038	val loss: 0.246	eval metrics/primary: 0.919	eval metrics/average: 0.477
+2020-11-17 15:48:43,175 update: 5	pth-time: 115.265s	
+2020-11-17 15:50:10,674 update: 10	loss: 0.025	val loss: 0.143	eval metrics/primary: 0.937	eval metrics/average: 0.458
+2020-11-17 15:50:10,676 update: 10	pth-time: 202.248s	
+2020-11-17 15:51:37,775 update: 15	loss: 0.011	val loss: 0.241	eval metrics/primary: 0.906	eval metrics/average: 0.506
+2020-11-17 15:51:37,776 update: 15	pth-time: 289.027s	
+2020-11-17 15:53:05,166 update: 20	loss: 0.002	val loss: 0.144	eval metrics/primary: 0.935	eval metrics/average: 0.434
+2020-11-17 15:53:05,166 update: 20	pth-time: 376.019s	
+2020-11-17 15:54:32,552 update: 25	loss: 0.004	val loss: 0.102	eval metrics/primary: 0.954	eval metrics/average: 0.456
+2020-11-17 15:54:32,552 update: 25	pth-time: 462.979s	
+2020-11-17 15:55:59,787 update: 30	loss: 0.012	val loss: 0.132	eval metrics/primary: 0.935	eval metrics/average: 0.436
+2020-11-17 15:55:59,788 update: 30	pth-time: 549.833s	

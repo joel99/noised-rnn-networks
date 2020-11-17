@@ -8,8 +8,11 @@ if module_path not in sys.path:
 
 from src.runner import Runner
 from run import prepare_config, add_suffix
-def init(variant, ckpt, base="", prefix="", graph_file=None):
+def init(variant, ckpt="lve", base="", prefix="", graph_file=None):
     # Initialize model
+    # If graph file is specified in config, that will be used
+    # If config specifies directory, we'll use `graph_file` for the filename
+    # If `graph_file` is None, the (alphabetically) first file will be used
 
     run_type = "eval"
     exp_config = osp.join("../configs", prefix, f"{variant}.yaml")
@@ -23,10 +26,18 @@ def init(variant, ckpt, base="", prefix="", graph_file=None):
                 "SYSTEM.NUM_GPUS", 1,
             ], suffix=prefix, graph_file=graph_file
         )
-    # Update relative path
-    config.defrost()
-    # Incorporate graph file into this loading. Currently, it will use the default one in the config.
-    config.freeze()
+    if graph_file is None and osp.isdir(config.MODEL.GRAPH_FILE):
+        config.defrost()
+        graphs = sorted(f for f in os.listdir(config.MODEL.GRAPH_FILE) if f.endswith('.edgelist'))
+        graph = graphs[0]
+        config.MODEL.GRAPH_FILE = osp.join(config.MODEL.GRAPH_FILE, graph)
+        graph_id = graph[:5]
+        add_suffix(config, graph_id)
+        ckpt_dir, ckpt_fn = osp.split(ckpt_path)
+        ckpt_path = osp.join(ckpt_dir, graph_id, ckpt_fn)
+        # Update relative path
+        # Incorporate graph file into this loading. Currently, it will use the default one in the config.
+        config.freeze()
     runner = Runner(config)
     runner.logger.clear_filehandlers()
     return runner, ckpt_path

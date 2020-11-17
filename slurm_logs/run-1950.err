@@ -1,0 +1,9 @@
+2020-11-17 15:46:39,071 Using 1 GPUs
+2020-11-17 15:46:39,072 Using cuda:0
+2020-11-17 15:46:41,929 number of trainable parameters: 44673
+2020-11-17 15:49:48,347 update: 5	loss: 0.008	val loss: 0.320	eval metrics/primary: 0.904	eval metrics/average: 0.439
+2020-11-17 15:49:48,348 update: 5	pth-time: 184.559s	
+2020-11-17 15:52:21,233 update: 10	loss: 0.011	val loss: 0.184	eval metrics/primary: 0.934	eval metrics/average: 0.484
+2020-11-17 15:52:21,234 update: 10	pth-time: 336.525s	
+2020-11-17 15:54:53,908 update: 15	loss: 0.020	val loss: 0.208	eval metrics/primary: 0.925	eval metrics/average: 0.504
+2020-11-17 15:54:53,909 update: 15	pth-time: 488.639s	
