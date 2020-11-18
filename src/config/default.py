@@ -64,7 +64,8 @@ _C.MODEL.HIDDEN_SIZE = 32
 _C.MODEL.GRAPH_FILE = "data/configs/graphs/"
 
 _C.MODEL.TYPE = "GRNN" # Default, graph rnn. Also supports GRU, for testing SeqMNIST
-_C.MODEL.DROPOUT = .1
+_C.MODEL.DROPOUT = .1 # Whoops, there's already some noise...
+_C.MODEL.NOISE_REG = 0.0 # Gaussian noise regularization
 _C.MODEL.INDEPENDENT_DYNAMICS = False # Do nodes have independent GRU parameters?
 _C.MODEL.AGGR = "add" # Message aggregation
 _C.MODEL.EMBED_EDGE = False # Add edge embedding

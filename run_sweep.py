@@ -5,7 +5,6 @@
 from typing import Union, List
 import os
 import os.path as osp
-from yacs.config import CfgNode as CN
 
 from run import get_parser, prepare_config
 

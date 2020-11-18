@@ -29,9 +29,8 @@ from analyze_utils import init
 
 
 variant = "dc"
-ckpt = 11
-graph_file = "n149_"
-runner, ckpt_path = init(variant, ckpt, graph_file=graph_file)
+# graph_file = "n149_"
+runner, ckpt_path = init(variant)
 #%%
 
 metrics, info = runner.eval(ckpt_path)
@@ -52,11 +51,14 @@ import seaborn as sns
 # We are most definitely not learning. Why? Signal is sparse.
 # inputs: B x T x N x 1
 # We want to see what's happening in all nodes over time (T x N)
-def show_trial(i=0, node=0):
+def show_trial(info, i=0, node=0):
+    inputs = info["inputs"]
+    outputs = info["outputs"]
+    targets = info["targets"]
     time_range = torch.arange(inputs.size(1)) # 23, 23 10 1
     node_in = inputs[i, :, node]
-    print(inputs.size())
-    print(inputs[i, 0])
+    # print(inputs.size())
+    # print(inputs[i, 0])
     node_out = outputs[i, :, node]
     node_target = targets[i, :, node]
     sns.heatmap(outputs[i].squeeze())
@@ -64,16 +66,18 @@ def show_trial(i=0, node=0):
     # plt.plot(time_range, node_out, label="prediction")
     # plt.plot(time_range, node_target, label="truth")
     plt.title(f"DC Node {node} Input {node_in[0].item()}| Trial {i} Target {node_target[0].item()}")
-    plt.legend(loc=(0.7, 0.1))
-show_trial(9, 12)
+show_trial(info, 9, 12)
 
 #%%
-# MNIST
-_, predicted = torch.max(outputs, 2) # B x T
-masked_predictions = torch.masked_select(predicted, masks) # B x 1
-print(masked_predictions.float().mean())
-def show_trial(trial=0):
-    plt.imshow(inputs[trial, 0])
-    plt.title(f"Pred: {masked_predictions[trial]} Label: {targets[trial]}")
+_, t, *_ = masks.size()
+n = runner.config.TASK.NUM_NODES
+h = runner.config.MODEL.HIDDEN_SIZE
+strength = 10.0
+perturbation = torch.zeros(t, n, h)
+perturbation_step = 10 # Right in the middle.
+nodes_perturbed = [0] # A random set
+perturbation[perturbation_step, nodes_perturbed] = torch.rand(h) * strength
+metrics_perturbed, info_perturbed = runner.eval(ckpt_path, save_path=None, log_tb=False, perturb=perturbation)
 
-show_trial(5)
+#%%
+show_trial(info_perturbed, 9, 12)

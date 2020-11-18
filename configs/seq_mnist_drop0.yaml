@@ -6,13 +6,11 @@ DATA:
 TASK:
   KEY: "seq_mnist"
   NUM_STEPS: -1
+  NUM_NODES: 12
   AGGREGATE_INPUT: True
   AGGREGATE_OUTPUT: True
 MODEL:
-  HIDDEN_SIZE: 64
-  GRAPH_FILE: "/nethome/jye72/projects/noised-rnn-networks/configs/graphs/n10_p0.6_test.edgelist"
-  NOISE_REG: 0.1
+  GRAPH_FILE: "/nethome/jye72/projects/noised-rnn-networks/configs/graphs/er_n12/"
+  DROPOUT: 0.0
 TRAIN:
   BATCH_SIZE: 512
-  LOG_INTERVAL: 1
-  VAL_INTERVAL: 1

@@ -24,10 +24,10 @@ from torch.utils import data
 import networkx as nx
 
 from analyze_utils import init
-
-variant = "sinusoid_test"
+from src.model import EvalRegistry
 
 variant = "sinusoid"
+variant = "sinusoid_test"
 runner, ckpt_path = init(variant)
 
 # We are prototyping on a single seed, and then writing a script to get
@@ -56,7 +56,7 @@ def show_trial(info, i=0, node=0, save_path="sinusoid.pdf"):
     # node_in = inputs[i, :, node]
     node_out = outputs[i, :, node]
     node_target = targets[i, :, node]
-    plt.axvline(3, label="Trial start", color="gray") # ! This depends on dataset
+    plt.axvline(3, label="Trial start", color="gray")
     plt.plot(time_range, node_out, label="prediction")
     plt.plot(time_range, node_target, label="truth")
     plt.title(f"Sinusoid Node {node}, Trial {i}")
@@ -68,11 +68,63 @@ show_trial(info, 1, 0)
 _, t, *_ = masks.size()
 n = runner.config.TASK.NUM_NODES
 h = runner.config.MODEL.HIDDEN_SIZE
-strength = 1.0
-perturbation = torch.zeros(t, n, h)
-perturbation_step = 10 # Right in the middle.
-nodes_perturbed = [0] # A random set
-perturbation[perturbation_step, nodes_perturbed] = torch.rand(h) * strength
-metrics, info = runner.eval(ckpt_path, save_path=None, log_tb=False, perturb=perturbation)
+def eval_func(info):
+    return EvalRegistry.eval_task(
+        runner.config.TASK.KEY,
+        info["outputs"],
+        info["targets"],
+        info["masks"]
+    )
 
-show_trial(info, 1, 0, save_path="sinusoid_perturbed_1x.pdf")
+def delta_mse(reference, perturbed, pulse_indices):
+    r"""
+        Measure delta in MSE on unperturbed nodes
+    """
+    targets = reference["targets"]
+    error_perturbed = f.mse_loss(perturbed["outputs"], targets, reduction="none")
+    error_ref = f.mse_loss(reference["outputs"], targets, reduction="none")
+    subset_indices = list(set(range(error_perturbed.size(-2))) - set(pulse_indices)) # excluded pulsed
+    subset_perturbed = error_perturbed[..., subset_indices, 0]
+    subset_ref = error_ref[..., subset_indices, 0]
+    subset_mask = masks[..., subset_indices, 0]
+
+    mse_perturbed = torch.masked_select(subset_perturbed, subset_mask).mean()
+    mse_ref = torch.masked_select(subset_ref, subset_mask).mean()
+    return mse_perturbed - mse_ref
+
+
+def pulse(
+    strength=1.0,
+    trials=5,
+    step=n // 2,
+    node=[0],
+    measure=eval_func
+):
+    r"""
+        A pulse experiment will accumulate results over a number of trials
+
+        returns: metrics as well as outputs processed by "measure"
+
+        # TODO plot effects (rise in MSE) against timestep, strength, node
+        # TODO move GPU
+    """
+    all_metrics = []
+    all_info = []
+    _, ref = runner.eval(ckpt_path)
+    for trial in range(trials):
+        perturbation = torch.zeros(t, n, h)
+        # Plot against time as well, ideally -- show invariance to node, and invariance against time, weak correlation against strength. (1.0 --> 100.0, 1000 doesn't do any more)
+        perturbation[step, node] = torch.rand(h) * strength
+        metrics_perturbed, info_perturbed = runner.eval(ckpt_path, perturb=perturbation)
+        all_metrics.append(metrics_perturbed)
+        all_info.append(delta_mse(ref, info_perturbed, node))
+    return all_metrics, all_info
+
+metrics_pert, info_pert = pulse(strength=100.0)
+# show_trial(info_perturbed, 1, 0, save_path="sinusoid_perturbed_1x.pdf")
+
+#%%
+print(info_pert)
+
+#%%
+show_trial(info_perturbed, 1, 10, save_path="sinusoid_perturbed_1x.pdf")

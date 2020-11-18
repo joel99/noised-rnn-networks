@@ -6,3 +6,6 @@ tb/
 logs/
 data/
 *.pdf
+slurm_logs
+*.out
+*.err

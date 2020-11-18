@@ -41,6 +41,7 @@ class GraphRNN(MessagePassing):
 
         self.hidden_size = config.HIDDEN_SIZE
         self.dropout = config.DROPOUT
+        self.noise_reg = config.NOISE_REG
         self.input_size = task_cfg.INPUT_SIZE
         self.norm = nn.LayerNorm(self.hidden_size)
 
@@ -105,6 +106,8 @@ class GraphRNN(MessagePassing):
 
         # B x N x H, B x N x H. Gru cell only supports 1 batch dim,
         state = self.rnn(m.view(-1, self.hidden_size), state.view(-1, self.hidden_size)).view(b, self.n, -1)
+        if self.noise_reg > 0:
+            state = state + torch.rand_like(state, device=state.device) * self.noise_reg
         return state
 
     # Note - x_j is source, x_i is target
@@ -267,7 +270,7 @@ def eval_dc(outputs, targets, masks):
     consensus_predictions = torch.masked_select(targets_matched, consensus_mask) # <= B x 1
     return {
         'primary': masked_predictions.float().mean(),
-        'average': torch.true_divide(consensus_predictions.sum(), (b*n))
+        'all_for_one': torch.true_divide(consensus_predictions.sum(), (b*n))
     }
     # ! note because we aggregate over predictions, this is a strict upper bound...
     # We likely have a much lower scorer if we require everything to be the same...
