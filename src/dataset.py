@@ -143,7 +143,6 @@ class SinusoidDataset(TemporalNetworkDataset):
         self.targets = sin_data.clone()
         self.masks = torch.ones_like(self.targets, dtype=torch.bool)
         self.masks[:, :warmup_period] = 0
-
         # if self.config.USE_ORACLE:
             # oracle = dataset_dict['clean_data'][..., :warmup_period + trial_period]
             # oracle = oracle[:, :task_cfg.NUM_NODES]
@@ -167,11 +166,11 @@ class DensityClassificationDataset(TemporalNetworkDataset):
         # Calculate T (depends on diameter of network..)
         initial_states = dataset_dict["data"][:, :task_cfg.NUM_NODES]
         B, N = initial_states.size()
-        if task_cfg.NUM_STEPS < 0:
+        if task_cfg.NUM_STEPS < 0: # == 21 for dc
             T = int(3 * math.log(N) / math.log(2)) # For N from 149 to 999, this is around 20 - 30 timesteps.
         else:
             T = task_cfg.NUM_STEPS
-        print(T)
+
         # We require our graphs to be fully connected, for simplicity, so the true diameter is shorter (6-10).
         # So this should be ample computation time?
         self.inputs = torch.zeros((B, T, N, 1))

@@ -94,6 +94,7 @@ class GraphRNN(MessagePassing):
             m_and_input = torch.cat([m, inputs], dim=-1)
             m = self.mix_input(m_and_input)
         m = self.norm(m)
+        # Oh, this dropout only affects the messages. that's wack.
         m = F.dropout(m, p=self.dropout, training=self.training)
 
         # ! No independent dynamics (for JIT)
@@ -206,6 +207,7 @@ class SeqSeqModel(nn.Module):
         input_mask: Optional[Tensor] = None,
         log_state: bool = False,
         perturb: Optional[Tensor] = None,
+        dropout_mask: Optional[Tensor] = None, # for dropout
     ):
         r"""
             Calculate loss.
@@ -236,6 +238,8 @@ class SeqSeqModel(nn.Module):
 
             if perturb is not None:
                 state = state + perturb[i].unsqueeze(0).expand_as(state)
+            if dropout_mask is not None:
+                state = state * dropout_mask[i].unsqueeze(0).expand_as(state)
         outputs = torch.stack(outputs, 1) # B x T (x N) x H
         loss = self.criterion(outputs, targets)
         # import pdb

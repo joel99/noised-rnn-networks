@@ -127,13 +127,15 @@ class Runner:
             self.best_val = ckpt_dict["best_val"]
         return ckpt_dict["extra_state"]
 
-    def load_device(self):
+    def load_device(self, device=None):
         r"""
             Load primary device.
         """
         if self.device is not None:
             return
-        if not torch.cuda.is_available():
+        if device is not None:
+            self.device = device
+        elif not torch.cuda.is_available():
             self.device = torch.device("cpu")
         else:
             self.num_gpus = min(self.config.SYSTEM.NUM_GPUS, torch.cuda.device_count())
@@ -339,7 +341,8 @@ class Runner:
             checkpoint_path: path of checkpoint
             save_path: If provided, will save outputs at this location.
             Other args (perturbations) will be forwarded to the model.
-
+            perturb: t x n x h # Additive noise
+            dropout_mask: t x n x h # Silenced states
         Returns:
             Model outputs for the dataset. (Thankfully, we're working with small tasks)
         """

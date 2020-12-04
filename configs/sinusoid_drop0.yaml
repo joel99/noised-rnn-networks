@@ -1,14 +1,14 @@
-EXPERIMENT: "sin_seed"
 CHECKPOINT_DIR: "/nethome/jye72/share/noised-rnn-networks/"
 DATA:
   DATAPATH: "/nethome/jye72/projects/noised-rnn-networks/data"
   TRAIN_FILENAME: "sin_train.pth"
   VAL_FILENAME: "sin_val.pth"
 TASK:
+  NUM_STEPS: 23
+  NUM_NODES: 12
   KEY: "sinusoid"
 MODEL:
-  GRAPH_FILE: "configs/graphs/sin_seed_test/"
+  GRAPH_FILE: "/nethome/jye72/projects/noised-rnn-networks/configs/graphs/er_n12/"
+  DROPOUT: 0.0
 TRAIN:
-  BATCH_SIZE: 100
-  CHECKPOINT_INTERVAL: 10
-  PATIENCE: 100
+  PATIENCE: 20

@@ -5,6 +5,7 @@ DATA:
   VAL_FILENAME: "sin_val.pth"
 TASK:
   NUM_NODES: 12
+  NUM_STEPS: 23
   KEY: "sinusoid"
 MODEL:
   GRAPH_FILE: "/nethome/jye72/projects/noised-rnn-networks/configs/graphs/er_n12/"

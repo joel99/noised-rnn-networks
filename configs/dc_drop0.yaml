@@ -6,6 +6,7 @@ DATA:
 TASK:
   KEY: "density_classification"
   NUM_NODES: 149
+  NUM_STEPS: 21
 MODEL:
   GRAPH_FILE: "/nethome/jye72/projects/noised-rnn-networks/configs/graphs/er_n149"
   # AGGR: 'max'
