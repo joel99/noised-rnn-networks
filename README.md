@@ -3,6 +3,7 @@
 Author: Joel Ye
 
 Course project for Network Science Class. How do RNN graph networks continue to compute when nodes are noised during computation?
+Full report posted in `report.pdf`.
 
 ## Installation
 This repo primarily requires PyTorch, PyTorch-Geoemetric, and NetworkX. The known compatible versions are in `requirements.txt`. They can be installed using:
