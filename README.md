@@ -9,7 +9,6 @@ This repo primarily requires PyTorch, PyTorch-Geoemetric, and NetworkX. The know
 
 `pip install -r requirements.txt`
 
-
 ## Organization
 `data` - notebooks for generating task data
 
